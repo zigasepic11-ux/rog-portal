@@ -1,0 +1,350 @@
+[
+  {
+    "region": "notranjska",
+    "slug": "ld_babno_polje",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_babno_polje.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_babno_polje.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_begunje",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_begunje.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_begunje.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_borovnica",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_borovnica.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_borovnica.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_brezovica",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_brezovica.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_brezovica.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_cajnarje",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_cajnarje.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_cajnarje.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_cerknica",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_cerknica.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_cerknica.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_gornje_jezero",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_gornje_jezero.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_gornje_jezero.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_grahovo",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_grahovo.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_grahovo.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_ig",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_ig.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_ig.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_iga_vas",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_iga_vas.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_iga_vas.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_javornik_postojna",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_javornik_postojna.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_javornik_postojna.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_kozlek",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_kozlek.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_kozlek.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_loz_stari_trg",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_loz_stari_trg.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_loz_stari_trg.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_lpn_jelen",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_lpn_jelen.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_lpn_jelen.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_lpn_ljubljanski_vrh",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_lpn_ljubljanski_vrh.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_lpn_ljubljanski_vrh.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_mokrc",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_mokrc.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_mokrc.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_nova_vas",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_nova_vas.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_nova_vas.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_pivka",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_pivka.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_pivka.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_prestranek",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_prestranek.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_prestranek.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_rakek",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_rakek.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_rakek.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_rakitna",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_rakitna.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_rakitna.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_rakovnik_skofljica",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_rakovnik_skofljica.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_rakovnik_skofljica.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_tabor_zagorje",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_tabor_zagorje.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_tabor_zagorje.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_tomiselj",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_tomiselj.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_tomiselj.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_trnovo",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_trnovo.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_trnovo.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_zemon",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_zemon.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_zemon.geojson"
+  },
+  {
+    "region": "notranjska",
+    "slug": "ld_zilce",
+    "kmlSource": "data/boundaries-kml/notranjska/ld_zilce.kml",
+    "geojsonUrl": "/boundaries/notranjska/ld_zilce.geojson"
+  },
+  {
+    "region": "pohorska",
+    "slug": "ld_kapla",
+    "kmlSource": "data/boundaries-kml/pohorska/ld_kapla.kml",
+    "geojsonUrl": "/boundaries/pohorska/ld_kapla.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_brje_erzelj",
+    "kmlSource": "data/boundaries-kml/primorska/ld_brje_erzelj.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_brje_erzelj.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_brkini",
+    "kmlSource": "data/boundaries-kml/primorska/ld_brkini.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_brkini.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_bukovca",
+    "kmlSource": "data/boundaries-kml/primorska/ld_bukovca.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_bukovca.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_dekani",
+    "kmlSource": "data/boundaries-kml/primorska/ld_dekani.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_dekani.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_dolce_komen",
+    "kmlSource": "data/boundaries-kml/primorska/ld_dolce_komen.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_dolce_komen.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_fajti_hrib",
+    "kmlSource": "data/boundaries-kml/primorska/ld_fajti_hrib.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_fajti_hrib.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_gaberk_divaca",
+    "kmlSource": "data/boundaries-kml/primorska/ld_gaberk_divaca.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_gaberk_divaca.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_gradisce_kosana",
+    "kmlSource": "data/boundaries-kml/primorska/ld_gradisce_kosana.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_gradisce_kosana.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_istra_gracisce",
+    "kmlSource": "data/boundaries-kml/primorska/ld_istra_gracisce.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_istra_gracisce.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_izola",
+    "kmlSource": "data/boundaries-kml/primorska/ld_izola.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_izola.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_jezero_komen",
+    "kmlSource": "data/boundaries-kml/primorska/ld_jezero_komen.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_jezero_komen.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_kojnik_podgorje",
+    "kmlSource": "data/boundaries-kml/primorska/ld_kojnik_podgorje.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_kojnik_podgorje.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_koper",
+    "kmlSource": "data/boundaries-kml/primorska/ld_koper.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_koper.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_kras_dutovlje",
+    "kmlSource": "data/boundaries-kml/primorska/ld_kras_dutovlje.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_kras_dutovlje.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_marezige",
+    "kmlSource": "data/boundaries-kml/primorska/ld_marezige.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_marezige.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_prem",
+    "kmlSource": "data/boundaries-kml/primorska/ld_prem.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_prem.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_rasa_storje",
+    "kmlSource": "data/boundaries-kml/primorska/ld_rasa_storje.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_rasa_storje.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_rizana",
+    "kmlSource": "data/boundaries-kml/primorska/ld_rizana.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_rizana.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_senozece",
+    "kmlSource": "data/boundaries-kml/primorska/ld_senozece.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_senozece.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_slavnik_materija",
+    "kmlSource": "data/boundaries-kml/primorska/ld_slavnik_materija.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_slavnik_materija.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_smarje",
+    "kmlSource": "data/boundaries-kml/primorska/ld_smarje.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_smarje.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_stanjel",
+    "kmlSource": "data/boundaries-kml/primorska/ld_stanjel.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_stanjel.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_strunjan",
+    "kmlSource": "data/boundaries-kml/primorska/ld_strunjan.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_strunjan.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_tabor_dronberk",
+    "kmlSource": "data/boundaries-kml/primorska/ld_tabor_dronberk.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_tabor_dronberk.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_tabor_sezana",
+    "kmlSource": "data/boundaries-kml/primorska/ld_tabor_sezana.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_tabor_sezana.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_timav_vreme",
+    "kmlSource": "data/boundaries-kml/primorska/ld_timav_vreme.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_timav_vreme.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_trstelj_kostanjevica",
+    "kmlSource": "data/boundaries-kml/primorska/ld_trstelj_kostanjevica.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_trstelj_kostanjevica.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_videz_kozina",
+    "kmlSource": "data/boundaries-kml/primorska/ld_videz_kozina.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_videz_kozina.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_vrhe_vrabce",
+    "kmlSource": "data/boundaries-kml/primorska/ld_vrhe_vrabce.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_vrhe_vrabce.geojson"
+  },
+  {
+    "region": "primorska",
+    "slug": "ld_zabnik_obrov",
+    "kmlSource": "data/boundaries-kml/primorska/ld_zabnik_obrov.kml",
+    "geojsonUrl": "/boundaries/primorska/ld_zabnik_obrov.geojson"
+  }
+]
