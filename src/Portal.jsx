@@ -18,6 +18,11 @@ const NAV = [
   { key: "docs", label: "Dokumenti" },
 ];
 
+function isMobileNow() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
+}
+
 export default function Portal({ onLogout }) {
   const [dash, setDash] = useState(null);
   const [me, setMe] = useState(null);
@@ -27,6 +32,10 @@ export default function Portal({ onLogout }) {
   const [tab, setTab] = useState("home");
   const [busyLd, setBusyLd] = useState(false);
 
+  // ✅ Mobile menu (drawer)
+  const [isMobile, setIsMobile] = useState(() => isMobileNow());
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // ✅ super samo po role
   const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
 
@@ -34,6 +43,29 @@ export default function Portal({ onLogout }) {
   const activeLdId = useMemo(() => {
     return String(dash?.ldId || me?.ldId || "").trim();
   }, [dash?.ldId, me?.ldId]);
+
+  // watch viewport changes (mobile/desktop)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const onChange = () => {
+      const m = mq.matches;
+      setIsMobile(m);
+      if (!m) setMenuOpen(false); // ko gre na desktop, zapri drawer
+    };
+
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  // ESC to close menu
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
 
   // 1) load /auth/me
   useEffect(() => {
@@ -81,7 +113,6 @@ export default function Portal({ onLogout }) {
       });
 
       setToken(out.token);
-      // reload da portal dobi nov dash za novo LD
       window.location.reload();
     } catch (e) {
       setErr(e.message);
@@ -89,48 +120,68 @@ export default function Portal({ onLogout }) {
     }
   }
 
+  function goTab(t) {
+    setTab(t);
+    if (isMobile) setMenuOpen(false);
+  }
+
   return (
     <div className="app">
       {/* TOP BAR */}
       <div className="appbar">
-        <div>
-          <div className="brand-left">
-            <span className="tree">🌲</span>
-            <span>ROG</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* ✅ Mobile hamburger */}
+          {isMobile && (
+            <button
+              className="btn-ghost"
+              onClick={() => setMenuOpen(true)}
+              aria-label="Odpri meni"
+              title="Meni"
+              style={{ padding: "8px 10px" }}
+            >
+              ☰
+            </button>
+          )}
 
-            {isSuper && (
-              <span
-                style={{
-                  marginLeft: 10,
-                  fontSize: 12,
-                  fontWeight: 900,
-                  padding: "4px 8px",
-                  borderRadius: 999,
-                  border: "1px solid rgba(107,78,46,.35)",
-                  background: "rgba(255,255,255,.6)",
-                  color: "#6B4E2E",
-                }}
-              >
-                ADMIN
-              </span>
-            )}
-          </div>
+          <div>
+            <div className="brand-left">
+              <span className="tree">🌲</span>
+              <span>ROG</span>
 
-          <div className="brand-sub">
-            {dash?.ldName
-              ? `LD: ${dash.ldName} (${dash.ldId})`
-              : activeLdId
-              ? `LD: ${activeLdId}`
-              : "Nalagam..."}
+              {isSuper && (
+                <span
+                  style={{
+                    marginLeft: 10,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(107,78,46,.35)",
+                    background: "rgba(255,255,255,.6)",
+                    color: "#6B4E2E",
+                  }}
+                >
+                  ADMIN
+                </span>
+              )}
+            </div>
+
+            <div className="brand-sub">
+              {dash?.ldName
+                ? `LD: ${dash.ldName} (${dash.ldId})`
+                : activeLdId
+                ? `LD: ${activeLdId}`
+                : "Nalagam..."}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {/* ✅ Dropdown se pokaže samo za super */}
           {isSuper && (
             <select
               className="input"
-              style={{ height: 42, width: 260, fontSize: 14 }}
+              style={{ height: 42, width: isMobile ? "min(320px, 70vw)" : 260, fontSize: 14 }}
               value={activeLdId || ""}
               onChange={(e) => switchLd(e.target.value)}
               title="Preklop LD (admin)"
@@ -154,23 +205,52 @@ export default function Portal({ onLogout }) {
         </div>
       </div>
 
+      {/* ✅ Mobile drawer overlay */}
+      {isMobile && menuOpen && (
+        <div className="drawer-backdrop" onMouseDown={() => setMenuOpen(false)} role="presentation">
+          <div className="drawer" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Meni">
+            <div className="drawer-head">
+              <div className="drawer-title">Meni</div>
+              <button className="btn-ghost" onClick={() => setMenuOpen(false)} aria-label="Zapri meni">
+                ✕
+              </button>
+            </div>
+
+            <div className="drawer-body">
+              {NAV.map((n) => (
+                <button
+                  key={n.key}
+                  className={"navbtn" + (tab === n.key ? " active" : "")}
+                  onClick={() => goTab(n.key)}
+                >
+                  <span>{n.label}</span>
+                  <span style={{ opacity: 0.5 }}>›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LAYOUT */}
       <div className="shell">
-        {/* SIDEBAR */}
-        <aside className="sidebar">
-          <div className="nav-title">Meni</div>
+        {/* SIDEBAR (desktop only) */}
+        {!isMobile && (
+          <aside className="sidebar">
+            <div className="nav-title">Meni</div>
 
-          {NAV.map((n) => (
-            <button
-              key={n.key}
-              className={"navbtn" + (tab === n.key ? " active" : "")}
-              onClick={() => setTab(n.key)}
-            >
-              <span>{n.label}</span>
-              <span style={{ opacity: 0.5 }}>›</span>
-            </button>
-          ))}
-        </aside>
+            {NAV.map((n) => (
+              <button
+                key={n.key}
+                className={"navbtn" + (tab === n.key ? " active" : "")}
+                onClick={() => goTab(n.key)}
+              >
+                <span>{n.label}</span>
+                <span style={{ opacity: 0.5 }}>›</span>
+              </button>
+            ))}
+          </aside>
+        )}
 
         {/* CONTENT */}
         <main className="content">
@@ -179,11 +259,11 @@ export default function Portal({ onLogout }) {
 
           {err && <div className="error">{err}</div>}
 
-          {tab === "home" && <HomePage dash={dash} onGo={setTab} />}
+          {tab === "home" && <HomePage dash={dash} onGo={goTab} />}
           {tab === "active" && <ActiveHuntsPage />}
           {tab === "users" && <UsersPage />}
           {tab === "logs" && <HuntLogsPage />}
-          {tab === "odvzem" && <OdvzemPage me={me} />} {/* ✅ NOVO */}
+          {tab === "odvzem" && <OdvzemPage me={me} />}
           {tab === "kml" && <KmlMejePage dash={dash} />}
 
           {tab === "docs" && (
@@ -214,7 +294,7 @@ function HomePage({ dash, onGo }) {
           <Quick label="Aktivni lov" onClick={() => onGo("active")} />
           <Quick label="Uporabniki" onClick={() => onGo("users")} />
           <Quick label="Dnevniki lova" onClick={() => onGo("logs")} />
-          <Quick label="Plan odvzema" onClick={() => onGo("odvzem")} /> {/* ✅ NOVO */}
+          <Quick label="Plan odvzema" onClick={() => onGo("odvzem")} />
           <Quick label="KML / meje" onClick={() => onGo("kml")} />
           <Quick label="Dokumenti" onClick={() => onGo("docs")} />
         </div>

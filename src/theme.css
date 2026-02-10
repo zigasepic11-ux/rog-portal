@@ -390,3 +390,100 @@ body{
   color: #6B4E2E;
   margin-top: 4px;
 }
+
+/* =========================
+   MOBILE DRAWER MENU
+   ========================= */
+.drawer-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 60;
+  display:flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 12px;
+}
+
+.drawer{
+  width: min(360px, 86vw);
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(107,78,46,.25);
+  border-radius: 16px;
+  box-shadow: 0 20px 55px rgba(0,0,0,.22);
+  padding: 12px;
+  display:flex;
+  flex-direction: column;
+  backdrop-filter: blur(12px);
+}
+
+.drawer-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 10px;
+  border-bottom: 1px solid rgba(107,78,46,.14);
+}
+
+.drawer-title{
+  font-weight: 950;
+  color: var(--brown);
+}
+
+.drawer-body{
+  padding-top: 10px;
+  display:flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* =========================
+   RESPONSIVE polish
+   ========================= */
+@media (max-width: 900px){
+  .shell{
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .content{
+    padding: 12px;
+  }
+
+  .grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px){
+  .appbar{
+    height: auto;
+    padding: 10px 12px;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .brand-left{
+    letter-spacing: 2px;
+  }
+
+  .page-title{
+    font-size: 18px;
+  }
+
+  .page-sub{
+    font-size: 12px;
+  }
+
+  .btn-mini{
+    height: 40px;
+    padding: 0 12px;
+  }
+
+  /* Tables: naj ostanejo scroll, ampak brez razbitja layouta */
+  .table{
+    min-width: 900px;
+  }
+}
