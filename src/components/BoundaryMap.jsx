@@ -115,6 +115,10 @@ export default function BoundaryMap({ geoJsonUrl }) {
 
   const [layer, setLayer] = useState("map"); // "map" | "topo" | "sat"
 
+  // ✅ Debug prikaz samo če eksplicitno vklopiš (Vite env):
+  // V Netlify/Local: nastavi VITE_DEBUG=1, če želiš videt status info
+  const DEBUG = String(import.meta?.env?.VITE_DEBUG || "").trim() === "1";
+
   // 1) Load boundary GeoJSON
   useEffect(() => {
     let cancelled = false;
@@ -126,7 +130,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
         if (!geoJsonUrl) return;
 
         const res = await fetch(geoJsonUrl);
-        if (!res.ok) throw new Error(`Ne morem naložiti meje: ${geoJsonUrl}`);
+        if (!res.ok) throw new Error(`Ne morem naložiti meje.`);
         const json = await res.json();
         if (!cancelled) setBoundary(json);
       } catch (e) {
@@ -170,6 +174,9 @@ export default function BoundaryMap({ geoJsonUrl }) {
     };
   }, []);
 
+  // Prikaži header samo, če je napaka ALI če je DEBUG=1
+  const showHeader = DEBUG || !!pointsErr || !!boundaryErr;
+
   return (
     <div
       style={{
@@ -179,14 +186,16 @@ export default function BoundaryMap({ geoJsonUrl }) {
         background: "white",
       }}
     >
-      {/* Header info */}
-      <div style={{ padding: 12, borderBottom: "1px solid rgba(107,78,46,.15)" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 900, color: "#6B4E2E" }}>Točke naloženih: {pointsCount}</div>
-          {pointsErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka točk: {pointsErr}</div> : null}
-          {boundaryErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka meje: {boundaryErr}</div> : null}
+      {/* Header info (skrito v normalnem načinu) */}
+      {showHeader ? (
+        <div style={{ padding: 12, borderBottom: "1px solid rgba(107,78,46,.15)" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+            {DEBUG ? <div style={{ fontWeight: 900, color: "#6B4E2E" }}>Točke naloženih: {pointsCount}</div> : null}
+            {pointsErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka točk: {pointsErr}</div> : null}
+            {boundaryErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka meje: {boundaryErr}</div> : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Map */}
       <div

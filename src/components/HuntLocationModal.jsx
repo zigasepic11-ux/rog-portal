@@ -84,6 +84,9 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
   const [boundary, setBoundary] = useState(null);
   const [bErr, setBErr] = useState("");
 
+  // ✅ Debug info (skrito privzeto)
+  const DEBUG = String(import.meta?.env?.VITE_DEBUG || "").trim() === "1";
+
   const [dbg, setDbg] = useState({
     ldId: "",
     slug: "",
@@ -113,6 +116,7 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
         const manifestUrl = `${BASE}boundaries/manifest.json`;
         const s = slug;
 
+        // dbg hranimo, a prikazujemo samo če je DEBUG
         setDbg({
           ldId: ldId || "",
           slug: s || "",
@@ -169,10 +173,10 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
 
   const labelLine =
     mode === "poi"
-      ? (safeHunt.poiName || safeHunt.locationName || "POI")
+      ? safeHunt.poiName || safeHunt.locationName || "POI"
       : mode === "approx"
-      ? (safeHunt.locationName || "Približna lokacija")
-      : (safeHunt.locationName || "");
+      ? safeHunt.locationName || "Približna lokacija"
+      : safeHunt.locationName || "";
 
   const poiType = mode === "poi" ? (safeHunt.poiType || "drugo") : null;
   const poiIcon = poiType ? getPoiIcon(poiType) : null;
@@ -224,10 +228,13 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
               {ldId ? ` • ${ldId}` : ""}
             </div>
 
-            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-              slug: <code>{dbg.slug || "—"}</code> • manifest: <code>{dbg.manifestUrl || "—"}</code> • geojson:{" "}
-              <code>{dbg.geoJsonUrl || "—"}</code>
-            </div>
+            {/* ✅ Debug izpis skrit (vključiš z VITE_DEBUG=1) */}
+            {DEBUG ? (
+              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                slug: <code>{dbg.slug || "—"}</code> • manifest: <code>{dbg.manifestUrl || "—"}</code> • geojson:{" "}
+                <code>{dbg.geoJsonUrl || "—"}</code>
+              </div>
+            ) : null}
 
             {bErr ? (
               <div style={{ marginTop: 6, color: "#B42318", fontWeight: 800, fontSize: 12 }}>
@@ -256,10 +263,7 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
               zoom={13}
               scrollWheelZoom
             >
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap"
-              />
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
 
               {boundary ? <GeoJSON data={boundary} style={{ weight: 5, fillOpacity: 0.10 }} /> : null}
 
@@ -279,11 +283,7 @@ export default function HuntLocationModal({ open, onClose, hunt }) {
               ) : null}
 
               {mode === "approx" ? (
-                <Circle
-                  center={[center.lat, center.lng]}
-                  radius={radiusM}
-                  pathOptions={{ weight: 2, fillOpacity: 0.18 }}
-                />
+                <Circle center={[center.lat, center.lng]} radius={radiusM} pathOptions={{ weight: 2, fillOpacity: 0.18 }} />
               ) : null}
 
               <FitTo boundary={boundary} center={center} />
