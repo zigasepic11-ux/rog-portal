@@ -1,6 +1,7 @@
 // src/KmlMejePage.jsx
 import { useEffect, useMemo, useState } from "react";
 import BoundaryMap from "./components/BoundaryMap";
+import PointsImport from "./PointsImport.jsx";
 
 function toSlug(ldIdOrSlug) {
   if (!ldIdOrSlug) return null;
@@ -8,9 +9,14 @@ function toSlug(ldIdOrSlug) {
   return s.startsWith("ld_") ? s : `ld_${s}`;
 }
 
-export default function KmlMejePage({ dash }) {
+export default function KmlMejePage({ dash, me }) {
   const [manifest, setManifest] = useState(null);
   const [err, setErr] = useState("");
+
+  const [showImport, setShowImport] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
 
   const ldSlug = useMemo(() => toSlug(dash?.ldId), [dash?.ldId]);
 
@@ -44,16 +50,28 @@ export default function KmlMejePage({ dash }) {
   return (
     <div>
       <div className="stat" style={{ marginBottom: 14 }}>
-        <h4>Meje lovišča</h4>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <h4>Meje lovišča</h4>
 
-        <div className="desc">
-          {dash?.ldName ? (
-            <>
-              Trenutno: <b>{dash.ldName}</b>
-            </>
-          ) : (
-            <>Nalagam lovišče…</>
-          )}
+            <div className="desc">
+              {dash?.ldName ? (
+                <>
+                  Trenutno: <b>{dash.ldName}</b>
+                </>
+              ) : (
+                <>Nalagam lovišče…</>
+              )}
+            </div>
+          </div>
+
+          {isSuper ? (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button className="btn-mini" onClick={() => setShowImport(true)}>
+                Uvozi točke
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {err && (
@@ -64,17 +82,24 @@ export default function KmlMejePage({ dash }) {
       </div>
 
       {geoJsonUrl ? (
-        <BoundaryMap geoJsonUrl={geoJsonUrl} />
+        <BoundaryMap key={refreshKey} geoJsonUrl={geoJsonUrl} />
       ) : (
         !err && (
           <div className="stat">
             <h4>Meja ni prikazana</h4>
-            <div className="desc">
-              Za to lovišče meje trenutno niso na voljo.
-            </div>
+            <div className="desc">Za to lovišče meje trenutno niso na voljo.</div>
           </div>
         )
       )}
+
+      <PointsImport
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onDone={() => {
+          // trigger reload points (BoundaryMap load points runs on mount)
+          setRefreshKey((k) => k + 1);
+        }}
+      />
     </div>
   );
 }

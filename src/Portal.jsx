@@ -264,7 +264,7 @@ export default function Portal({ onLogout }) {
           {tab === "users" && <UsersPage />}
           {tab === "logs" && <HuntLogsPage />}
           {tab === "odvzem" && <OdvzemPage me={me} />}
-          {tab === "kml" && <KmlMejePage dash={dash} />}
+          {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
 
           {tab === "docs" && (
             <div className="stat">
