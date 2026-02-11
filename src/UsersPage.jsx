@@ -58,7 +58,9 @@ export default function UsersPage() {
 
   async function removeUser(u) {
     setErr("");
-    const ok = confirm(`Odstranim uporabnika ${u.name} (${u.code})?\n\nTo ga bo DISABLE (ne izbriše trajno).`);
+    const ok = confirm(
+      `Odstranim uporabnika ${u.name} (${u.code})?\n\nPOZOR: To ga TRAJNO izbriše iz Firestore (ni samo disable).`
+    );
     if (!ok) return;
 
     try {
@@ -93,7 +95,7 @@ export default function UsersPage() {
   return (
     <>
       <div className="page-sub" style={{ marginBottom: 10 }}>
-        Seznam članov za tvojo LD. Tukaj dodajaš uporabnike, omogočiš/onemogočiš račun, resetiraš PIN in odstraniš uporabnika (disable).
+        Seznam članov za tvojo LD. Tukaj dodajaš uporabnike, omogočiš/onemogočiš račun, resetiraš PIN in odstraniš uporabnika.
       </div>
 
       {err && <div className="error">{err}</div>}
@@ -198,9 +200,7 @@ export default function UsersPage() {
                   <td>{u.name}</td>
                   <td>{u.role}</td>
                   <td>
-                    <span className={u.enabled ? "pill pill-on" : "pill pill-off"}>
-                      {u.enabled ? "ENABLED" : "DISABLED"}
-                    </span>
+                    <span className={u.enabled ? "pill pill-on" : "pill pill-off"}>{u.enabled ? "ENABLED" : "DISABLED"}</span>
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

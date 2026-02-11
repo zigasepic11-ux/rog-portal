@@ -1,29 +1,9 @@
-// src/api.js
-
-// ✅ Najprej ENV (Vite), fallback na Render
-export const API_BASE =
-  import.meta.env.VITE_API_BASE?.trim() ||
-  import.meta.env.VITE_API_URL?.trim() ||
-  "https://rog-backend.onrender.com";
-
-export function getToken() {
-  return localStorage.getItem("rog_token");
-}
-
-export function setToken(token) {
-  localStorage.setItem("rog_token", token);
-}
-
-export function clearToken() {
-  localStorage.removeItem("rog_token");
-}
-
-// ✅ Centraliziran fetch + lep error
 export async function api(path, { method = "GET", body } = {}) {
   const token = getToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     method,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
