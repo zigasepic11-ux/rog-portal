@@ -2,6 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
+
 function defaultYear() {
   return String(new Date().getFullYear());
 }
@@ -89,8 +93,90 @@ function fileToBase64(file) {
   });
 }
 
+function exportOdvzemPdf(view, year, displayRows, totals) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+
+  const title = `ROG – Realizacija odvzema (${year})`;
+  doc.setFontSize(16);
+  doc.text(title, 40, 40);
+
+  doc.setFontSize(10);
+  doc.text(
+    `LD: ${view?.ldId || "—"}   |   Plan: ${totals.plan ?? "—"}   |   Odstrel: ${totals.exec}   |   Pending: ${
+      totals.pend
+    }   |   ${totals.percent}`,
+    40,
+    60
+  );
+
+  const head = [["Divjad", "Razred", "Plan", "Odstrel", "Pending", "%", "Status"]];
+
+  const body = displayRows
+    .filter((r) => r._type !== "header")
+    .map((r) => [
+      r.species || "",
+      r.classLabel || "",
+      r.plan == null ? "" : String(r.plan),
+      r.executed == null ? "" : String(r.executed),
+      r.pending == null ? "" : String(r.pending),
+      pct(r.executed, r.plan),
+      statusIcon(r.plan, r.executed),
+    ]);
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: 80,
+    styles: { fontSize: 9, cellPadding: 5, overflow: "linebreak" },
+    headStyles: { fontStyle: "bold" },
+    margin: { left: 40, right: 40 },
+    columnStyles: {
+      0: { cellWidth: 160 },
+      1: { cellWidth: 250 },
+      2: { cellWidth: 80 },
+      3: { cellWidth: 80 },
+      4: { cellWidth: 80 },
+      5: { cellWidth: 60 },
+      6: { cellWidth: 60 },
+    },
+  });
+
+  doc.save(`odvzem_${year}.pdf`);
+}
+
+function exportOdvzemExcel(view, year, displayRows, totals) {
+  const rows = [];
+
+  rows.push(["ROG – Realizacija odvzema", year]);
+  rows.push(["LD", view?.ldId || "—"]);
+  rows.push(["Plan", totals.plan ?? "—", "Odstrel", totals.exec, "Pending", totals.pend, "%", totals.percent]);
+  rows.push([]);
+  rows.push(["Divjad", "Razred", "Plan", "Odstrel", "Pending", "%", "Status"]);
+
+  for (const r of displayRows) {
+    if (r._type === "header") {
+      rows.push([r.species]);
+      continue;
+    }
+    rows.push([
+      r.species || "",
+      r.classLabel || "",
+      r.plan == null ? "" : Number(r.plan),
+      r.executed == null ? "" : Number(r.executed),
+      r.pending == null ? "" : Number(r.pending),
+      pct(r.executed, r.plan),
+      statusIcon(r.plan, r.executed),
+    ]);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Odvzem");
+
+  XLSX.writeFile(wb, `odvzem_${year}.xlsx`);
+}
+
 export default function OdvzemPage() {
-  // ✅ FIX: defaultYear() mora biti klic, ne funkcija
   const [year, setYear] = useState(defaultYear());
 
   const [loading, setLoading] = useState(false);
@@ -135,7 +221,6 @@ export default function OdvzemPage() {
       const sa = String(a?.species || "").localeCompare(String(b?.species || ""));
       if (sa !== 0) return sa;
 
-      // True-total naj bo na koncu
       const la = String(a?.classLabel || "");
       const lb = String(b?.classLabel || "");
       const ta = isTrueTotalLabel(la) ? 1 : 0;
@@ -146,12 +231,6 @@ export default function OdvzemPage() {
     });
   }, [view?.rows]);
 
-  /**
-   * ✅ LZS clean view:
-   * - header row (ime divjadi)
-   * - detajli (brez hidden subtotalov in brez total)
-   * - 1× total (“Skupaj”) — iz plana, če obstaja, sicer izračunan iz detail
-   */
   const displayRows = useMemo(() => {
     const out = [];
 
@@ -167,11 +246,8 @@ export default function OdvzemPage() {
 
     for (const sp of speciesList) {
       const list = bySpecies.get(sp) || [];
-
-      // true total (če obstaja)
       const total = list.find((x) => isTrueTotalLabel(x?.classLabel));
 
-      // detail rows: skrij hidden subtotal + skrij true-total (total bo posebej)
       const details = list
         .filter((x) => {
           const label = String(x?.classLabel || "");
@@ -188,13 +264,9 @@ export default function OdvzemPage() {
           pending: toNumOrNull(d?.pending) ?? 0,
         }));
 
-      // Header
       out.push({ _type: "header", species: sp });
-
-      // Detail
       for (const d of details) out.push(d);
 
-      // Total: če ga ni, ga izračunamo iz detail (plan = null)
       const computedExec = details.reduce((s, x) => s + (toNumOrNull(x.executed) ?? 0), 0);
       const computedPend = details.reduce((s, x) => s + (toNumOrNull(x.pending) ?? 0), 0);
 
@@ -211,11 +283,6 @@ export default function OdvzemPage() {
     return out;
   }, [rows]);
 
-  /**
-   * ✅ Totals zgoraj:
-   * - plan seštejemo samo iz TOTAL vrstic (da ni podvajanja)
-   * - odstrel + pending seštejemo iz DETAIL vrstic (100% pravilno, brez double-count)
-   */
   const totals = useMemo(() => {
     let plan = 0;
     let planHasAny = false;
@@ -227,7 +294,6 @@ export default function OdvzemPage() {
         exec += toNumOrNull(r.executed) ?? 0;
         pend += toNumOrNull(r.pending) ?? 0;
       }
-
       if (r._type === "total") {
         const p = toNumOrNull(r.plan);
         if (p != null) {
@@ -309,6 +375,22 @@ export default function OdvzemPage() {
             {importing ? "Uvažam..." : "Uvozi Excel"}
           </button>
 
+          <button
+            className="btn-mini"
+            onClick={() => exportOdvzemPdf(view, year, displayRows, totals)}
+            disabled={!view || loading || importing || !hasAny}
+          >
+            Export PDF
+          </button>
+
+          <button
+            className="btn-mini"
+            onClick={() => exportOdvzemExcel(view, year, displayRows, totals)}
+            disabled={!view || loading || importing || !hasAny}
+          >
+            Export Excel
+          </button>
+
           <div style={{ marginLeft: "auto", fontWeight: 900, color: "#6B4E2E" }}>
             Plan: {totals.plan == null ? "—" : totals.plan} | Odstrel: {totals.exec} | Pending: {totals.pend} |{" "}
             {totals.percent}
@@ -332,9 +414,9 @@ export default function OdvzemPage() {
         )}
 
         {!!hasAny && (
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", maxHeight: "70vh", overflowY: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-              <thead>
+              <thead style={{ position: "sticky", top: 0, zIndex: 5, background: "rgba(250,250,250,0.95)" }}>
                 <tr style={{ textAlign: "left" }}>
                   <th style={{ padding: 10, width: 260 }}>Divjad</th>
                   <th style={{ padding: 10 }}>Razred</th>

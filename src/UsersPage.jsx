@@ -50,6 +50,20 @@ export default function UsersPage() {
         method: "POST",
       });
       alert(`NOV PIN za ${u.name} (${u.code}): ${out.pin}`);
+      await load();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function removeUser(u) {
+    setErr("");
+    const ok = confirm(`Odstranim uporabnika ${u.name} (${u.code})?\n\nTo ga bo DISABLE (ne izbriše trajno).`);
+    if (!ok) return;
+
+    try {
+      await api(`/ld/users/${encodeURIComponent(u.code)}`, { method: "DELETE" });
+      await load();
     } catch (e) {
       setErr(e.message);
     }
@@ -79,7 +93,7 @@ export default function UsersPage() {
   return (
     <>
       <div className="page-sub" style={{ marginBottom: 10 }}>
-        Seznam članov za tvojo LD. Tukaj dodajaš uporabnike, omogočiš/onemogočiš račun in resetiraš PIN.
+        Seznam članov za tvojo LD. Tukaj dodajaš uporabnike, omogočiš/onemogočiš račun, resetiraš PIN in odstraniš uporabnika (disable).
       </div>
 
       {err && <div className="error">{err}</div>}
@@ -158,7 +172,7 @@ export default function UsersPage() {
               <th>Ime</th>
               <th>Vloga</th>
               <th>Status</th>
-              <th style={{ width: 240 }}>Akcije</th>
+              <th style={{ width: 320 }}>Akcije</th>
             </tr>
           </thead>
 
@@ -193,8 +207,17 @@ export default function UsersPage() {
                       <button className="btn-ghost" onClick={() => toggleEnabled(u)}>
                         {u.enabled ? "Onemogoči" : "Omogoči"}
                       </button>
+
                       <button className="btn-ghost" onClick={() => resetPin(u)}>
                         Reset PIN
+                      </button>
+
+                      <button
+                        className="btn-ghost"
+                        onClick={() => removeUser(u)}
+                        style={{ borderColor: "rgba(200,0,0,.25)", color: "#a01515" }}
+                      >
+                        Odstrani
                       </button>
                     </div>
                   </td>

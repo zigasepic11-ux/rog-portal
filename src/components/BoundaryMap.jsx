@@ -1,5 +1,5 @@
 // src/components/BoundaryMap.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { api } from "../api.js";
@@ -116,8 +116,17 @@ export default function BoundaryMap({ geoJsonUrl }) {
   const [layer, setLayer] = useState("map"); // "map" | "topo" | "sat"
 
   // ✅ Debug prikaz samo če eksplicitno vklopiš (Vite env):
-  // V Netlify/Local: nastavi VITE_DEBUG=1, če želiš videt status info
+  // v Netlify/Local: nastavi VITE_DEBUG=1, če želiš videt status info
   const DEBUG = String(import.meta?.env?.VITE_DEBUG || "").trim() === "1";
+
+  // ✅ Filter tipov točk (ikone)
+  const [typeFilter, setTypeFilter] = useState({
+    krmisce: true,
+    opazovalnica: true,
+    lovska_koca: true,
+    njiva: true,
+    drugo: true,
+  });
 
   // 1) Load boundary GeoJSON
   useEffect(() => {
@@ -130,7 +139,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
         if (!geoJsonUrl) return;
 
         const res = await fetch(geoJsonUrl);
-        if (!res.ok) throw new Error(`Ne morem naložiti meje.`);
+        if (!res.ok) throw new Error("Ne morem naložiti meje.");
         const json = await res.json();
         if (!cancelled) setBoundary(json);
       } catch (e) {
@@ -174,8 +183,17 @@ export default function BoundaryMap({ geoJsonUrl }) {
     };
   }, []);
 
-  // Prikaži header samo, če je napaka ALI če je DEBUG=1
   const showHeader = DEBUG || !!pointsErr || !!boundaryErr;
+
+  const filteredPoints = useMemo(() => {
+    const arr = Array.isArray(points) ? points : [];
+    return arr
+      .filter((p) => typeof p?.lat === "number" && typeof p?.lng === "number")
+      .filter((p) => {
+        const t = normalizeType(p?.type) || "drugo";
+        return typeFilter[t] !== false;
+      });
+  }, [points, typeFilter]);
 
   return (
     <div
@@ -196,6 +214,28 @@ export default function BoundaryMap({ geoJsonUrl }) {
           </div>
         </div>
       ) : null}
+
+      {/* Filter ikonic */}
+      <div style={{ padding: 12, borderBottom: "1px solid rgba(107,78,46,.12)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <div style={{ fontWeight: 950, color: "#6B4E2E" }}>Filtri točk</div>
+
+          {Object.keys(typeFilter).map((k) => (
+            <label key={k} style={{ display: "flex", gap: 6, alignItems: "center", fontWeight: 850, fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={typeFilter[k]}
+                onChange={(e) => setTypeFilter((s) => ({ ...s, [k]: e.target.checked }))}
+              />
+              {k}
+            </label>
+          ))}
+
+          <div style={{ marginLeft: "auto", fontWeight: 900, color: "#6B4E2E", fontSize: 12 }}>
+            Prikazanih: {filteredPoints.length}
+          </div>
+        </div>
+      </div>
 
       {/* Map */}
       <div
@@ -232,19 +272,16 @@ export default function BoundaryMap({ geoJsonUrl }) {
           ) : null}
 
           {/* Points */}
-          {Array.isArray(points) &&
-            points
-              .filter((p) => typeof p?.lat === "number" && typeof p?.lng === "number")
-              .map((p) => (
-                <Marker key={p.id} position={[p.lat, p.lng]} icon={getPointIcon(p.type)}>
-                  <Popup>
-                    <div style={{ fontWeight: 900 }}>{p.name || p.type || "Točka"}</div>
-                    {p.type ? <div style={{ opacity: 0.75 }}>Tip: {p.type}</div> : null}
-                    {p.notes ? <div style={{ marginTop: 6 }}>{p.notes}</div> : null}
-                    {p.source ? <div style={{ marginTop: 6, opacity: 0.7 }}>Vir: {p.source}</div> : null}
-                  </Popup>
-                </Marker>
-              ))}
+          {filteredPoints.map((p) => (
+            <Marker key={p.id} position={[p.lat, p.lng]} icon={getPointIcon(p.type)}>
+              <Popup>
+                <div style={{ fontWeight: 900 }}>{p.name || p.type || "Točka"}</div>
+                {p.type ? <div style={{ opacity: 0.75 }}>Tip: {p.type}</div> : null}
+                {p.notes ? <div style={{ marginTop: 6 }}>{p.notes}</div> : null}
+                {p.source ? <div style={{ marginTop: 6, opacity: 0.7 }}>Vir: {p.source}</div> : null}
+              </Popup>
+            </Marker>
+          ))}
         </MapContainer>
       </div>
     </div>
