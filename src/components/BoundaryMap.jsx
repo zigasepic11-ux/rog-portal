@@ -47,6 +47,30 @@ function getPointIcon(type) {
   return ICON_CACHE.get(url);
 }
 
+// ===== Robust number parsing =====
+
+function parseNumber(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+function coercePoint(p) {
+  const lat = parseNumber(p?.lat);
+  const lng = parseNumber(p?.lng);
+
+  return {
+    ...p,
+    lat,
+    lng,
+    _typeNorm: normalizeType(p?.type) || "drugo",
+    _validLatLng: lat != null && lng != null,
+  };
+}
+
 // ===== Helpers =====
 
 function FitBounds({ data }) {
@@ -111,12 +135,10 @@ export default function BoundaryMap({ geoJsonUrl }) {
 
   const [points, setPoints] = useState([]);
   const [pointsErr, setPointsErr] = useState("");
-  const [pointsCount, setPointsCount] = useState(0);
 
   const [layer, setLayer] = useState("map"); // "map" | "topo" | "sat"
 
   // ✅ Debug prikaz samo če eksplicitno vklopiš (Vite env):
-  // v Netlify/Local: nastavi VITE_DEBUG=1, če želiš videt status info
   const DEBUG = String(import.meta?.env?.VITE_DEBUG || "").trim() === "1";
 
   // ✅ Filter tipov točk (ikone)
@@ -152,7 +174,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
     };
   }, [geoJsonUrl]);
 
-  // 2) Load points from backend (/ld/points) with Bearer token
+  // 2) Load points from backend (/ld/points)
   useEffect(() => {
     let cancelled = false;
 
@@ -160,20 +182,17 @@ export default function BoundaryMap({ geoJsonUrl }) {
       try {
         setPointsErr("");
         setPoints([]);
-        setPointsCount(0);
 
         const out = await api("/ld/points");
         const arr = Array.isArray(out?.points) ? out.points : [];
 
         if (!cancelled) {
           setPoints(arr);
-          setPointsCount(arr.length);
         }
       } catch (e) {
         if (!cancelled) {
           setPointsErr(e?.message || String(e));
           setPoints([]);
-          setPointsCount(0);
         }
       }
     })();
@@ -183,17 +202,34 @@ export default function BoundaryMap({ geoJsonUrl }) {
     };
   }, []);
 
-  const showHeader = DEBUG || !!pointsErr || !!boundaryErr;
+  // ✅ normalize points (lat/lng robust)
+  const normalizedPoints = useMemo(() => {
+    const arr = Array.isArray(points) ? points : [];
+    return arr.map(coercePoint);
+  }, [points]);
+
+  // ✅ diagnostics (da ni “tiho”)
+  const diag = useMemo(() => {
+    const total = normalizedPoints.length;
+    const valid = normalizedPoints.filter((p) => p._validLatLng).length;
+    const invalid = total - valid;
+
+    const byType = {};
+    for (const p of normalizedPoints) {
+      const t = p._typeNorm || "drugo";
+      byType[t] = (byType[t] || 0) + 1;
+    }
+
+    return { total, valid, invalid, byType };
+  }, [normalizedPoints]);
 
   const filteredPoints = useMemo(() => {
-    const arr = Array.isArray(points) ? points : [];
-    return arr
-      .filter((p) => typeof p?.lat === "number" && typeof p?.lng === "number")
-      .filter((p) => {
-        const t = normalizeType(p?.type) || "drugo";
-        return typeFilter[t] !== false;
-      });
-  }, [points, typeFilter]);
+    return normalizedPoints
+      .filter((p) => p._validLatLng)
+      .filter((p) => typeFilter[p._typeNorm] !== false);
+  }, [normalizedPoints, typeFilter]);
+
+  const showHeader = DEBUG || !!pointsErr || !!boundaryErr || diag.invalid > 0;
 
   return (
     <div
@@ -204,14 +240,32 @@ export default function BoundaryMap({ geoJsonUrl }) {
         background: "white",
       }}
     >
-      {/* Header info (skrito v normalnem načinu) */}
+      {/* Header info */}
       {showHeader ? (
         <div style={{ padding: 12, borderBottom: "1px solid rgba(107,78,46,.15)" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
-            {DEBUG ? <div style={{ fontWeight: 900, color: "#6B4E2E" }}>Točke naloženih: {pointsCount}</div> : null}
+            <div style={{ fontWeight: 900, color: "#6B4E2E" }}>
+              Točk (skupaj): {diag.total} | veljavne lat/lng: {diag.valid} | neveljavne: {diag.invalid}
+            </div>
             {pointsErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka točk: {pointsErr}</div> : null}
             {boundaryErr ? <div style={{ color: "#B42318", fontWeight: 800 }}>Napaka meje: {boundaryErr}</div> : null}
+            {DEBUG ? (
+              <div style={{ opacity: 0.75, fontSize: 12 }}>
+                Types:{" "}
+                {Object.keys(diag.byType)
+                  .sort()
+                  .map((k) => `${k}:${diag.byType[k]}`)
+                  .join("  ")}
+              </div>
+            ) : null}
           </div>
+
+          {/* če imaš invalid, pokažemo primer (da takoj vidiš kaj je narobe) */}
+          {diag.invalid > 0 ? (
+            <div style={{ marginTop: 6, opacity: 0.8, fontSize: 12 }}>
+              Opomba: del točk ima neveljavne koordinate (lat/lng). Točke z invalid koordinatami se ne rišejo.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -272,16 +326,25 @@ export default function BoundaryMap({ geoJsonUrl }) {
           ) : null}
 
           {/* Points */}
-          {filteredPoints.map((p) => (
-            <Marker key={p.id} position={[p.lat, p.lng]} icon={getPointIcon(p.type)}>
-              <Popup>
-                <div style={{ fontWeight: 900 }}>{p.name || p.type || "Točka"}</div>
-                {p.type ? <div style={{ opacity: 0.75 }}>Tip: {p.type}</div> : null}
-                {p.notes ? <div style={{ marginTop: 6 }}>{p.notes}</div> : null}
-                {p.source ? <div style={{ marginTop: 6, opacity: 0.7 }}>Vir: {p.source}</div> : null}
-              </Popup>
-            </Marker>
-          ))}
+          {filteredPoints.map((p) => {
+            // safety: ne renderaj, če karkoli ni ok
+            if (p.lat == null || p.lng == null) return null;
+
+            const key = String(p.id || p.pointId || `${p.lat},${p.lng}`);
+            return (
+              <Marker key={key} position={[p.lat, p.lng]} icon={getPointIcon(p.type)}>
+                <Popup>
+                  <div style={{ fontWeight: 900 }}>{p.name || p.type || "Točka"}</div>
+                  {p.type ? <div style={{ opacity: 0.75 }}>Tip: {p.type}</div> : null}
+                  <div style={{ opacity: 0.75, fontSize: 12 }}>
+                    lat: {String(p.lat)} | lng: {String(p.lng)}
+                  </div>
+                  {p.notes ? <div style={{ marginTop: 6 }}>{p.notes}</div> : null}
+                  {p.source ? <div style={{ marginTop: 6, opacity: 0.7 }}>Vir: {p.source}</div> : null}
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
     </div>
