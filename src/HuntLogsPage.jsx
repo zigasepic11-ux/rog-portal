@@ -1,10 +1,7 @@
 // src/HuntLogsPage.jsx
 import { useEffect, useMemo, useState } from "react";
-import { api } from "./api.js";
+import { api, apiDownload } from "./api.js";
 import HuntLocationModal from "./components/HuntLocationModal.jsx";
-
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 function toInputDate(d) {
   const two = (n) => String(n).padStart(2, "0");
@@ -14,7 +11,7 @@ function toInputDate(d) {
 function fmt(iso) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString();
+    return new Date(iso).toLocaleString("sl-SI");
   } catch {
     return iso;
   }
@@ -26,7 +23,6 @@ function canShowMap(log) {
   if (mode === "poi") return log?.lat != null && log?.lng != null;
   if (mode === "approx")
     return (log?.approxLat != null && log?.approxLng != null) || (log?.lat != null && log?.lng != null);
-
   return log?.lat != null && log?.lng != null;
 }
 
@@ -95,97 +91,51 @@ export default function HuntLogsPage() {
   const total = filteredLogs.length;
   const harvested = useMemo(() => filteredLogs.filter((x) => x.harvest).length, [filteredLogs]);
 
-  function exportCsv() {
-    const headers = [
-      "hunterName",
-      "startedAt",
-      "finishedAt",
-      "harvest",
-      "species",
-      "endedReason",
-      "notes",
-      "locationName",
-      "lat",
-      "lng",
-    ];
-
-    const esc = (v) => {
-      const s = v == null ? "" : String(v);
-      return `"${s.replaceAll('"', '""')}"`;
-    };
-
-    const rows = filteredLogs.map((x) => headers.map((h) => esc(x[h])).join(","));
-    const csv = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hunt_logs_${from}_${to}_${harvestFilter}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportPdf() {
-    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-    const title = `ROG – Dnevniki lova (${from} → ${to})`;
-    doc.setFontSize(16);
-    doc.text(title, 40, 40);
-
-    doc.setFontSize(10);
-    doc.text(`Filter: ${harvestFilter}   |   Skupaj: ${total}   |   Uplen: ${harvested}`, 40, 60);
-
-    const head = [["Lovec", "Začetek", "Konec", "Uplen", "Vrsta", "Razlog", "Lokacija", "Lat", "Lng", "Opombe"]];
-
-    const body = filteredLogs.map((x) => [
-      x.hunterName || "—",
-      fmt(x.startedAt),
-      fmt(x.finishedAt),
-      x.harvest ? "UPLEN" : "BREZ",
-      x.species || "—",
-      x.endedReason || "—",
-      x.locationName || "—",
-      x.lat == null ? "" : String(x.lat),
-      x.lng == null ? "" : String(x.lng),
-      x.notes || "—",
-    ]);
-
-    autoTable(doc, {
-      head,
-      body,
-      startY: 80,
-      styles: {
-        fontSize: 9,
-        cellPadding: 5,
-        overflow: "linebreak",
-      },
-      headStyles: {
-        fontStyle: "bold",
-      },
-      columnStyles: {
-        0: { cellWidth: 110 },
-        1: { cellWidth: 120 },
-        2: { cellWidth: 120 },
-        3: { cellWidth: 70 },
-        4: { cellWidth: 90 },
-        5: { cellWidth: 80 },
-        6: { cellWidth: 140 },
-        7: { cellWidth: 80 },
-        8: { cellWidth: 80 },
-        9: { cellWidth: 220 },
-      },
-      margin: { left: 40, right: 40 },
-    });
-
-    doc.save(`hunt_logs_${from}_${to}_${harvestFilter}.pdf`);
-  }
-
   function openMapRow(row) {
     setSelected(normalizeForModal(row));
     setOpen(true);
+  }
+
+  function backendFilter() {
+    if (harvestFilter === "yes") return "harvest";
+    if (harvestFilter === "no") return "noharvest";
+    return "all";
+  }
+
+  async function exportPdf() {
+    setErr("");
+    try {
+      const qs = new URLSearchParams();
+      if (from) qs.set("from", `${from}T00:00:00`);
+      if (to) qs.set("to", `${to}T23:59:59`);
+      qs.set("filter", backendFilter());
+      qs.set("limit", "2000");
+
+      await apiDownload(
+        `/ld/hunt-logs/export-pdf?${qs.toString()}`,
+        `hunt_logs_${from}_${to}_${harvestFilter}.pdf`
+      );
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function exportCsv() {
+    setErr("");
+    try {
+      const qs = new URLSearchParams();
+      if (from) qs.set("from", `${from}T00:00:00`);
+      if (to) qs.set("to", `${to}T23:59:59`);
+      qs.set("filter", backendFilter());
+      qs.set("limit", "2000");
+
+      await apiDownload(
+        `/ld/hunt-logs/export-csv?${qs.toString()}`,
+        `hunt_logs_${from}_${to}_${harvestFilter}.csv`
+      );
+    } catch (e) {
+      setErr(e.message);
+    }
   }
 
   return (
@@ -222,9 +172,7 @@ export default function HuntLogsPage() {
             {loading ? "Nalagam..." : "Prikaži"}
           </button>
 
-          <button className="btn-mini" onClick={exportCsv} disabled={!filteredLogs.length}>
-            Export CSV
-          </button>
+          
 
           <button className="btn-mini" onClick={exportPdf} disabled={!filteredLogs.length}>
             Export PDF

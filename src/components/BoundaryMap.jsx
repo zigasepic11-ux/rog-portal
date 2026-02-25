@@ -59,16 +59,51 @@ function parseNumber(v) {
 }
 
 function coercePoint(p) {
-  const lat = parseNumber(p?.lat);
-  const lng = parseNumber(p?.lng);
+  let lat = parseNumber(p?.lat);
+  let lng = parseNumber(p?.lng);
+
+  // safety: če bi kdaj prišlo v mikro-stopinjah (46645168), popravimo
+  if (lat != null && Math.abs(lat) > 1000) lat = lat / 1_000_000;
+  if (lng != null && Math.abs(lng) > 1000) lng = lng / 1_000_000;
+
+  const valid =
+    lat != null &&
+    lng != null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180;
 
   return {
     ...p,
     lat,
     lng,
     _typeNorm: normalizeType(p?.type) || "drugo",
-    _validLatLng: lat != null && lng != null,
+    _validLatLng: valid,
   };
+}
+
+// ===== UI helpers (labels + chip icons) =====
+
+function labelForType(k) {
+  switch (k) {
+    case "krmisce":
+      return "Krmišče";
+    case "opazovalnica":
+      return "Opazovalnica";
+    case "lovska_koca":
+      return "Lovska koča";
+    case "njiva":
+      return "Njiva";
+    default:
+      return "Drugo";
+  }
+}
+
+function iconForType(k) {
+  return ICONS[k] || FALLBACK_ICON;
 }
 
 // ===== Helpers =====
@@ -116,20 +151,31 @@ function LayerButtons({ layer, setLayer }) {
         boxShadow: "0 8px 26px rgba(0,0,0,0.14)",
       }}
     >
-      <button style={btnStyle(layer === "map")} onClick={() => setLayer("map")} disabled={layer === "map"}>
+      <button style={btnStyle(layer === "map")} onClick={() => setLayer("map")} disabled={layer === "map"} type="button">
         Zemljevid
       </button>
-      <button style={btnStyle(layer === "topo")} onClick={() => setLayer("topo")} disabled={layer === "topo"}>
+      <button
+        style={btnStyle(layer === "topo")}
+        onClick={() => setLayer("topo")}
+        disabled={layer === "topo"}
+        type="button"
+      >
         Topo
       </button>
-      <button style={btnStyle(layer === "sat")} onClick={() => setLayer("sat")} disabled={layer === "sat"}>
+      <button style={btnStyle(layer === "sat")} onClick={() => setLayer("sat")} disabled={layer === "sat"} type="button">
         Satelit
       </button>
     </div>
   );
 }
 
-export default function BoundaryMap({ geoJsonUrl }) {
+/**
+ * Props:
+ * - geoJsonUrl: url do meje
+ * - ldId: trenutni ld (da reloadamo točke ob switch)
+ * - reloadKey: spremeniš po importu/brisanje → reload
+ */
+export default function BoundaryMap({ geoJsonUrl, ldId, reloadKey = 0 }) {
   const [boundary, setBoundary] = useState(null);
   const [boundaryErr, setBoundaryErr] = useState("");
 
@@ -141,7 +187,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
   // ✅ Debug prikaz samo če eksplicitno vklopiš (Vite env):
   const DEBUG = String(import.meta?.env?.VITE_DEBUG || "").trim() === "1";
 
-  // ✅ Filter tipov točk (ikone)
+  // ✅ Filter tipov točk
   const [typeFilter, setTypeFilter] = useState({
     krmisce: true,
     opazovalnica: true,
@@ -160,7 +206,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
         setBoundary(null);
         if (!geoJsonUrl) return;
 
-        const res = await fetch(geoJsonUrl);
+        const res = await fetch(geoJsonUrl, { cache: "no-store" });
         if (!res.ok) throw new Error("Ne morem naložiti meje.");
         const json = await res.json();
         if (!cancelled) setBoundary(json);
@@ -174,7 +220,7 @@ export default function BoundaryMap({ geoJsonUrl }) {
     };
   }, [geoJsonUrl]);
 
-  // 2) Load points from backend (/ld/points)
+  // 2) Load points from backend (/ld/points) — reload ob ldId/reloadKey
   useEffect(() => {
     let cancelled = false;
 
@@ -183,12 +229,12 @@ export default function BoundaryMap({ geoJsonUrl }) {
         setPointsErr("");
         setPoints([]);
 
+        if (!ldId) return;
+
         const out = await api("/ld/points");
         const arr = Array.isArray(out?.points) ? out.points : [];
 
-        if (!cancelled) {
-          setPoints(arr);
-        }
+        if (!cancelled) setPoints(arr);
       } catch (e) {
         if (!cancelled) {
           setPointsErr(e?.message || String(e));
@@ -200,15 +246,15 @@ export default function BoundaryMap({ geoJsonUrl }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ldId, reloadKey]);
 
-  // ✅ normalize points (lat/lng robust)
+  // normalize points
   const normalizedPoints = useMemo(() => {
     const arr = Array.isArray(points) ? points : [];
     return arr.map(coercePoint);
   }, [points]);
 
-  // ✅ diagnostics (da ni “tiho”)
+  // diagnostics
   const diag = useMemo(() => {
     const total = normalizedPoints.length;
     const valid = normalizedPoints.filter((p) => p._validLatLng).length;
@@ -260,45 +306,148 @@ export default function BoundaryMap({ geoJsonUrl }) {
             ) : null}
           </div>
 
-          {/* če imaš invalid, pokažemo primer (da takoj vidiš kaj je narobe) */}
           {diag.invalid > 0 ? (
             <div style={{ marginTop: 6, opacity: 0.8, fontSize: 12 }}>
-              Opomba: del točk ima neveljavne koordinate (lat/lng). Točke z invalid koordinatami se ne rišejo.
+              Opomba: del točk ima neveljavne koordinate (lat/lng). Te točke se ne rišejo.
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {/* Filter ikonic */}
-      <div style={{ padding: 12, borderBottom: "1px solid rgba(107,78,46,.12)" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+      {/* Filters (ROG chips) */}
+      <div
+        style={{
+          padding: 12,
+          borderBottom: "1px solid rgba(107,78,46,.12)",
+          background: "linear-gradient(180deg, rgba(254,251,242,.92), rgba(255,255,255,.95))",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div style={{ fontWeight: 950, color: "#6B4E2E" }}>Filtri točk</div>
 
-          {Object.keys(typeFilter).map((k) => (
-            <label key={k} style={{ display: "flex", gap: 6, alignItems: "center", fontWeight: 850, fontSize: 12 }}>
-              <input
-                type="checkbox"
-                checked={typeFilter[k]}
-                onChange={(e) => setTypeFilter((s) => ({ ...s, [k]: e.target.checked }))}
-              />
-              {k}
-            </label>
-          ))}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              style={{
+                borderRadius: 999,
+                padding: "6px 10px",
+                background: "rgba(107,78,46,.08)",
+                border: "1px solid rgba(107,78,46,.20)",
+                color: "#6B4E2E",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+              onClick={() =>
+                setTypeFilter({
+                  krmisce: true,
+                  opazovalnica: true,
+                  lovska_koca: true,
+                  njiva: true,
+                  drugo: true,
+                })
+              }
+            >
+              Vse
+            </button>
+
+            <button
+              type="button"
+              style={{
+                borderRadius: 999,
+                padding: "6px 10px",
+                background: "rgba(107,78,46,.04)",
+                border: "1px solid rgba(107,78,46,.16)",
+                color: "#6B4E2E",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+              onClick={() =>
+                setTypeFilter({
+                  krmisce: false,
+                  opazovalnica: false,
+                  lovska_koca: false,
+                  njiva: false,
+                  drugo: false,
+                })
+              }
+            >
+              Nič
+            </button>
+          </div>
 
           <div style={{ marginLeft: "auto", fontWeight: 900, color: "#6B4E2E", fontSize: 12 }}>
             Prikazanih: {filteredPoints.length}
           </div>
         </div>
+
+        <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
+          {Object.keys(typeFilter).map((k) => {
+            const active = !!typeFilter[k];
+            const label = labelForType(k);
+            const iconSrc = iconForType(k);
+
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTypeFilter((s) => ({ ...s, [k]: !s[k] }))}
+                title={active ? `Skrij: ${label}` : `Prikaži: ${label}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  cursor: "pointer",
+                  userSelect: "none",
+
+                  border: active ? "2px solid rgba(107,78,46,.55)" : "1px solid rgba(107,78,46,.22)",
+                  background: active ? "rgba(107,78,46,.12)" : "rgba(255,255,255,.75)",
+                  boxShadow: active ? "0 10px 22px rgba(0,0,0,.10)" : "none",
+                  transition: "all 120ms ease",
+
+                  color: "#6B4E2E",
+                  fontWeight: 950,
+                  fontSize: 12,
+                }}
+              >
+                <span
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 10,
+                    display: "grid",
+                    placeItems: "center",
+                    background: active ? "rgba(107,78,46,.14)" : "rgba(107,78,46,.06)",
+                    border: "1px solid rgba(107,78,46,.18)",
+                  }}
+                >
+                  <img src={iconSrc} alt={label} style={{ width: 18, height: 18 }} />
+                </span>
+
+                <span style={{ letterSpacing: 0.2 }}>{label}</span>
+
+                <span
+                  style={{
+                    marginLeft: 2,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    background: "rgba(107,78,46,.10)",
+                    border: "1px solid rgba(107,78,46,.18)",
+                    fontWeight: 950,
+                    fontSize: 11,
+                  }}
+                >
+                  {diag?.byType?.[k] || 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Map */}
-      <div
-        style={{
-          height: "70vh",
-          position: "relative",
-          background: "white",
-        }}
-      >
+      <div style={{ height: "70vh", position: "relative", background: "white" }}>
         <MapContainer style={{ height: "100%", width: "100%" }} center={[46.1, 14.9]} zoom={10}>
           <LayerButtons layer={layer} setLayer={setLayer} />
 
@@ -327,10 +476,10 @@ export default function BoundaryMap({ geoJsonUrl }) {
 
           {/* Points */}
           {filteredPoints.map((p) => {
-            // safety: ne renderaj, če karkoli ni ok
             if (p.lat == null || p.lng == null) return null;
 
             const key = String(p.id || p.pointId || `${p.lat},${p.lng}`);
+
             return (
               <Marker key={key} position={[p.lat, p.lng]} icon={getPointIcon(p.type)}>
                 <Popup>

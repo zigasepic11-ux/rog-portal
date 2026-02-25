@@ -1,6 +1,6 @@
 // src/Login.jsx
 import { useState } from "react";
-import { api, setToken } from "./api.js";
+import { api } from "./api.js";
 
 export default function Login({ onLoggedIn }) {
   const [code, setCode] = useState("");
@@ -16,13 +16,26 @@ export default function Login({ onLoggedIn }) {
     try {
       const out = await api("/auth/login", {
         method: "POST",
-        body: { code: code.trim(), pin: pin.trim() },
+        body: {
+          code: code.trim(),
+          pin: pin.trim(),
+        },
       });
 
-      setToken(out.token);
-      onLoggedIn?.(out.user);
+      if (!out?.token) {
+        throw new Error("Login ni vrnil tokena.");
+      }
+
+      // ✅ shrani token
+      localStorage.setItem("token", out.token);
+
+      // ✅ obvesti app
+      if (typeof onLoggedIn === "function") {
+        onLoggedIn(out.user || null);
+      }
+
     } catch (e) {
-      setErr(e.message);
+      setErr(e?.message || "Napaka pri prijavi.");
     } finally {
       setLoading(false);
     }
@@ -47,6 +60,7 @@ export default function Login({ onLoggedIn }) {
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="npr. 999999"
+                autoComplete="username"
               />
             </div>
 
@@ -58,6 +72,7 @@ export default function Login({ onLoggedIn }) {
                 onChange={(e) => setPin(e.target.value)}
                 placeholder="••••"
                 type="password"
+                autoComplete="current-password"
               />
             </div>
 

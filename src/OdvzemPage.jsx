@@ -1,6 +1,6 @@
 // src/OdvzemPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api.js";
+import { api, API_BASE, getToken } from "./api.js";
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -42,12 +42,6 @@ function statusIcon(plan, executed) {
   return "🔴";
 }
 
-/**
- * True total row:
- * - "skupaj"
- * - "<divjad> skupaj"
- * Brez moški/ženski/mladiči...
- */
 function isTrueTotalLabel(label) {
   const s = String(label || "").trim().toLowerCase();
   if (!s) return false;
@@ -61,18 +55,13 @@ function isTrueTotalLabel(label) {
   return false;
 }
 
-/**
- * Vmesni subtotali, ki jih želimo skriti:
- * - "skupaj moški spol"
- * - "skupaj ženski spol"
- * - itd.
- */
 function isHiddenSubtotal(label) {
   const s = String(label || "").trim().toLowerCase();
   if (!s) return false;
 
   const hasTogether = s.includes("skupaj");
-  const isSexSubtotal = s.includes("moški") || s.includes("moski") || s.includes("ženski") || s.includes("zenski");
+  const isSexSubtotal =
+    s.includes("moški") || s.includes("moski") || s.includes("ženski") || s.includes("zenski");
   const isYoungSubtotal = s.includes("mladi");
 
   if (hasTogether && (isSexSubtotal || isYoungSubtotal) && !isTrueTotalLabel(label)) return true;
@@ -91,6 +80,39 @@ function fileToBase64(file) {
     };
     r.readAsDataURL(file);
   });
+}
+
+/** ✅ Download blob iz backend-a (PDF/XLSX) z istim tokenom kot api() */
+async function downloadFile(path, filename) {
+  const token = getToken();
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "GET",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let msg = text || `Napaka ${res.status}`;
+    try {
+      const j = JSON.parse(text);
+      msg = j?.error || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const blob = await res.blob();
+
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function exportOdvzemPdf(view, year, displayRows, totals) {
@@ -176,6 +198,75 @@ function exportOdvzemExcel(view, year, displayRows, totals) {
   XLSX.writeFile(wb, `odvzem_${year}.xlsx`);
 }
 
+/* ================= UI HELPERS (OLD MONEY) ================= */
+
+function IconPencil({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+      />
+    </svg>
+  );
+}
+
+function ConfirmModal({ open, title, children, onClose, busy }) {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 9999,
+      }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: "min(520px, 100%)",
+          background: "#fff",
+          borderRadius: 16,
+          border: "1px solid rgba(107,78,46,.18)",
+          boxShadow: "0 18px 50px rgba(0,0,0,.22)",
+          padding: 16,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontWeight: 950, color: "#6B4E2E" }}>{title}</div>
+          <button
+            className="btn-mini"
+            onClick={onClose}
+            disabled={busy}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(107,78,46,.25)",
+              color: "#6B4E2E",
+              borderRadius: 999,
+              padding: "8px 12px",
+              cursor: busy ? "not-allowed" : "pointer",
+            }}
+          >
+            Zapri
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= PAGE ================= */
+
 export default function OdvzemPage() {
   const [year, setYear] = useState(defaultYear());
 
@@ -185,6 +276,14 @@ export default function OdvzemPage() {
   const [view, setView] = useState(null);
 
   const timerRef = useRef(null);
+
+  // ✅ edit mode + modal state (NEW)
+  const [editMode, setEditMode] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editRow, setEditRow] = useState(null);
+  const [editValue, setEditValue] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -218,7 +317,7 @@ export default function OdvzemPage() {
   const rows = useMemo(() => {
     const r = Array.isArray(view?.rows) ? view.rows : [];
     return [...r].sort((a, b) => {
-      const sa = String(a?.species || "").localeCompare(String(b?.species || ""));
+      const sa = String(a?.species || "").localeCompare(String(b?.species || ""), "sl");
       if (sa !== 0) return sa;
 
       const la = String(a?.classLabel || "");
@@ -227,7 +326,7 @@ export default function OdvzemPage() {
       const tb = isTrueTotalLabel(lb) ? 1 : 0;
       if (ta !== tb) return ta - tb;
 
-      return la.localeCompare(lb);
+      return la.localeCompare(lb, "sl");
     });
   }, [view?.rows]);
 
@@ -242,7 +341,7 @@ export default function OdvzemPage() {
       bySpecies.get(sp).push(r);
     }
 
-    const speciesList = Array.from(bySpecies.keys()).sort((a, b) => a.localeCompare(b));
+    const speciesList = Array.from(bySpecies.keys()).sort((a, b) => a.localeCompare(b, "sl"));
 
     for (const sp of speciesList) {
       const list = bySpecies.get(sp) || [];
@@ -257,10 +356,14 @@ export default function OdvzemPage() {
         })
         .map((d) => ({
           _type: "detail",
+          key: d.key,
           species: sp,
           classLabel: String(d?.classLabel || "").trim() || "—",
           plan: toNumOrNull(d?.plan),
           executed: toNumOrNull(d?.executed) ?? 0,
+          executedAuto: toNumOrNull(d?.executedAuto) ?? 0,
+          executedDelta: toNumOrNull(d?.executedDelta) ?? 0,
+          override: d?.override || null,
           pending: toNumOrNull(d?.pending) ?? 0,
         }));
 
@@ -272,10 +375,16 @@ export default function OdvzemPage() {
 
       out.push({
         _type: "total",
+        key: total?.key, // total key from plan, if exists
         species: sp,
         classLabel: "Skupaj",
         plan: total ? toNumOrNull(total?.plan) : null,
+
         executed: total ? (toNumOrNull(total?.executed) ?? computedExec) : computedExec,
+        executedAuto: total ? (toNumOrNull(total?.executedAuto) ?? computedExec) : computedExec,
+        executedDelta: total ? (toNumOrNull(total?.executedDelta) ?? 0) : 0,
+        override: total?.override || null,
+
         pending: total ? (toNumOrNull(total?.pending) ?? computedPend) : computedPend,
       });
     }
@@ -350,6 +459,91 @@ export default function OdvzemPage() {
     return `Realizacija odvzema – ${ld || "LD"} , ${year} • Zadnja posodobitev plana: ${up} • Auto refresh: 20s`;
   }, [view?.ldId, view?.updatedAt, year]);
 
+  async function exportElegantPdf() {
+    setErr("");
+    try {
+      await downloadFile(`/ld/odvzem/export-pdf?year=${encodeURIComponent(year)}`, `odvzem_${year}.pdf`);
+    } catch (e) {
+      setErr(e?.message || String(e));
+    }
+  }
+
+  async function exportElegantExcel() {
+    setErr("");
+    try {
+      await downloadFile(`/ld/odvzem/export-excel?year=${encodeURIComponent(year)}`, `odvzem_${year}.xlsx`);
+    } catch (e) {
+      setErr(e?.message || String(e));
+    }
+  }
+
+  function openEdit(r) {
+    if (!r?.key) {
+      setErr("Ta vrstica nima key (ne morem urejati).");
+      return;
+    }
+    setErr("");
+    setEditRow(r);
+    setEditValue(String(toNumOrNull(r.executed) ?? 0));
+    setEditOpen(true);
+  }
+
+  function closeEdit() {
+    if (savingEdit) return;
+    setEditOpen(false);
+    setEditRow(null);
+    setEditValue("");
+  }
+
+  async function saveEdit() {
+    if (!editRow?.key) return;
+
+    const desired = toNumOrNull(editValue);
+    if (desired == null || desired < 0) {
+      setErr("Vpiši veljavno število (0 ali več).");
+      return;
+    }
+
+    if (!window.confirm("Ali res želiš shraniti spremembo odstrela?")) return;
+
+    setSavingEdit(true);
+    setErr("");
+    try {
+      await api(`/ld/odvzem/override?year=${encodeURIComponent(year)}&key=${encodeURIComponent(editRow.key)}`, {
+        method: "PATCH",
+        body: { executed: desired, reason: "portal manual edit" },
+      });
+
+      await load();
+      closeEdit();
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function resetEdit() {
+    if (!editRow?.key) return;
+
+    if (!window.confirm("Ali res želiš razveljaviti popravek?")) return;
+
+    setSavingEdit(true);
+    setErr("");
+    try {
+      await api(`/ld/odvzem/override?year=${encodeURIComponent(year)}&key=${encodeURIComponent(editRow.key)}`, {
+        method: "DELETE",
+      });
+
+      await load();
+      closeEdit();
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   return (
     <div>
       <div className="stat" style={{ marginBottom: 12 }}>
@@ -375,20 +569,34 @@ export default function OdvzemPage() {
             {importing ? "Uvažam..." : "Uvozi Excel"}
           </button>
 
-          <button
-            className="btn-mini"
-            onClick={() => exportOdvzemPdf(view, year, displayRows, totals)}
-            disabled={!view || loading || importing || !hasAny}
-          >
+          <button className="btn-mini" onClick={exportElegantPdf} disabled={!view || loading || importing || !hasAny}>
             Export PDF
           </button>
 
+          <button className="btn-mini" onClick={exportElegantExcel} disabled={!view || loading || importing || !hasAny}>
+            Export Excel
+          </button>
+
+          {/* ✅ ONE EDIT TOGGLE (NEW) */}
           <button
             className="btn-mini"
-            onClick={() => exportOdvzemExcel(view, year, displayRows, totals)}
-            disabled={!view || loading || importing || !hasAny}
+            onClick={() => setEditMode((v) => !v)}
+            disabled={loading || importing}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              borderRadius: 999,
+              padding: "10px 14px",
+              background: editMode ? "#6B4E2E" : "rgba(107,78,46,.10)",
+              color: editMode ? "white" : "#6B4E2E",
+              border: "1px solid rgba(107,78,46,.25)",
+              fontWeight: 900,
+            }}
+            title="Vklopi/izklopi urejanje"
           >
-            Export Excel
+            <IconPencil size={16} />
+            {editMode ? "Urejanje: vklopljeno" : "Urejanje"}
           </button>
 
           <div style={{ marginLeft: "auto", fontWeight: 900, color: "#6B4E2E" }}>
@@ -397,10 +605,16 @@ export default function OdvzemPage() {
           </div>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>{subtitle}</div>
+        {/* ✅ hint text */}
+        <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>{subtitle}</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            {editMode ? "Klikni svinčnik pri vrstici." : ""}
+          </div>
+        </div>
 
         {err && (
-          <div className="error" style={{ marginTop: 10 }}>
+          <div className="error" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
             {err}
           </div>
         )}
@@ -415,16 +629,18 @@ export default function OdvzemPage() {
 
         {!!hasAny && (
           <div style={{ overflowX: "auto", maxHeight: "70vh", overflowY: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 5, background: "rgba(250,250,250,0.95)" }}>
                 <tr style={{ textAlign: "left" }}>
                   <th style={{ padding: 10, width: 260 }}>Divjad</th>
                   <th style={{ padding: 10 }}>Razred</th>
                   <th style={{ padding: 10, width: 110 }}>Plan</th>
-                  <th style={{ padding: 10, width: 110 }}>Odstrel</th>
+                  <th style={{ padding: 10, width: 140 }}>Odstrel</th>
                   <th style={{ padding: 10, width: 110 }}>Pending</th>
                   <th style={{ padding: 10, width: 120 }}>%</th>
                   <th style={{ padding: 10, width: 90 }}>Status</th>
+                  {/* ✅ edit column (empty header) */}
+                  <th style={{ padding: 10, width: 80, textAlign: "right" }}></th>
                 </tr>
               </thead>
 
@@ -434,7 +650,7 @@ export default function OdvzemPage() {
                     return (
                       <tr key={`h-${r.species}-${idx}`} style={{ borderTop: "2px solid rgba(107,78,46,.22)" }}>
                         <td style={{ padding: "12px 10px", fontWeight: 950, color: "#6B4E2E" }}>{r.species}</td>
-                        <td colSpan={6} style={{ padding: "12px 10px", opacity: 0.55 }} />
+                        <td colSpan={7} style={{ padding: "12px 10px", opacity: 0.55 }} />
                       </tr>
                     );
                   }
@@ -443,6 +659,11 @@ export default function OdvzemPage() {
                   const plan = r.plan;
                   const executed = r.executed;
                   const pending = r.pending;
+
+                  const hasOverride = !!r.override || (toNumOrNull(r.executedDelta) ?? 0) !== 0;
+
+                  // ✅ show pencil only when editMode ON and row is editable (detail + total)
+                  const canEditRow = editMode && r._type !== "header" && !!r.key;
 
                   return (
                     <tr
@@ -453,6 +674,7 @@ export default function OdvzemPage() {
                       }}
                     >
                       <td style={{ padding: 10, color: "rgba(0,0,0,0)" }}>{r.species}</td>
+
                       <td
                         style={{
                           padding: 10,
@@ -461,12 +683,55 @@ export default function OdvzemPage() {
                         }}
                       >
                         {r.classLabel}
+                        {hasOverride && (
+                          <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 900, color: "#B24A3B" }}>
+                            (popravljeno)
+                          </span>
+                        )}
                       </td>
+
                       <td style={{ padding: 10, fontWeight: isTotal ? 950 : 800 }}>{fmtNum(plan)}</td>
-                      <td style={{ padding: 10, fontWeight: isTotal ? 950 : 800 }}>{fmtNum(executed)}</td>
+
+                      <td style={{ padding: 10, fontWeight: isTotal ? 950 : 800 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span>{fmtNum(executed)}</span>
+                          {hasOverride && (
+                            <span style={{ fontSize: 12, opacity: 0.65 }}>
+                              auto {fmtNum(r.executedAuto)} {r.executedDelta ? `(Δ ${fmtNum(r.executedDelta)})` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
                       <td style={{ padding: 10, fontWeight: isTotal ? 950 : 800 }}>{fmtNum(pending)}</td>
                       <td style={{ padding: 10, fontWeight: 950, color: "#6B4E2E" }}>{pct(executed, plan)}</td>
                       <td style={{ padding: 10, fontWeight: 950 }}>{statusIcon(plan, executed)}</td>
+
+                      {/* ✅ tiny pencil button, only in editMode */}
+                      <td style={{ padding: 10, textAlign: "right" }}>
+                        {canEditRow ? (
+                          <button
+                            title="Uredi odstrel"
+                            onClick={() => openEdit(r)}
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: 10,
+                              border: "1px solid rgba(107,78,46,.22)",
+                              background: "rgba(107,78,46,.08)",
+                              color: "#6B4E2E",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <IconPencil size={16} />
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -474,11 +739,73 @@ export default function OdvzemPage() {
             </table>
 
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
-              Prikaz: pri vsaki divjadi je samo 1× “Skupaj”. Skriti so “skupaj moški/ženski …”, da je tabela bolj zračna.
+              Prikaz: pri vsaki divjadi je samo 1× “Skupaj”. Skriti so “skupaj moški/ženski …”, da je tabela bolj
+              zračna. Urejanje nastavi “končni Odstrel”, sistem shrani delta popravek.
             </div>
           </div>
         )}
       </div>
+
+      {/* ===== NEW minimal modal ===== */}
+      <ConfirmModal open={editOpen} title="Popravek odstrela" onClose={closeEdit} busy={savingEdit}>
+        <div style={{ opacity: 0.85, marginBottom: 10 }}>
+          <div style={{ fontWeight: 900 }}>{editRow?.species || "—"}</div>
+          <div style={{ fontSize: 13, color: "rgba(0,0,0,.65)" }}>{editRow?.classLabel || "—"}</div>
+          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
+            Auto: {fmtNum(editRow?.executedAuto)}{" "}
+            {(toNumOrNull(editRow?.executedDelta) ?? 0) !== 0 ? ` • Trenutni Δ ${fmtNum(editRow?.executedDelta)}` : ""}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+          <div style={{ minWidth: 220, flex: 1 }}>
+            <div className="label">Odstrel (popravek)</div>
+            <input
+              className="input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder="npr. 3"
+              style={{ height: 54 }}
+              disabled={savingEdit}
+            />
+            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>Namig: vpiši 0, če želiš “nič”.</div>
+          </div>
+
+          <button
+            onClick={resetEdit}
+            disabled={savingEdit}
+            style={{
+              height: 54,
+              borderRadius: 12,
+              padding: "0 14px",
+              border: "1px solid rgba(107,78,46,.25)",
+              background: "transparent",
+              color: "#6B4E2E",
+              fontWeight: 900,
+              cursor: savingEdit ? "not-allowed" : "pointer",
+            }}
+          >
+            Razveljavi
+          </button>
+
+          <button
+            onClick={saveEdit}
+            disabled={savingEdit}
+            style={{
+              height: 54,
+              borderRadius: 12,
+              padding: "0 16px",
+              border: "1px solid rgba(107,78,46,.25)",
+              background: "#6B4E2E",
+              color: "white",
+              fontWeight: 950,
+              cursor: savingEdit ? "not-allowed" : "pointer",
+            }}
+          >
+            {savingEdit ? "Shranjujem…" : "Shrani"}
+          </button>
+        </div>
+      </ConfirmModal>
     </div>
   );
 }

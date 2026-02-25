@@ -1,137 +1,250 @@
 // src/PointsImport.jsx
-import { useMemo, useRef, useState } from "react";
-import { api } from "./api.js";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "./api";
+
+// --- helpers ---
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onerror = () => reject(new Error("Ne morem prebrati datoteke."));
-    r.onload = () => {
-      const s = String(r.result || "");
-      const idx = s.indexOf("base64,");
-      if (idx >= 0) return resolve(s.slice(idx + 7));
-      resolve(s);
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      // "data:...;base64,AAAA"
+      const b64 = result.includes(",") ? result.split(",")[1] : "";
+      if (!b64) {
+        reject(new Error("Neveljaven base64 (datoteka se ni pravilno prebrala)."));
+        return;
+      }
+      resolve(b64);
     };
-    r.readAsDataURL(file);
+
+    reader.onerror = () => reject(new Error("Napaka pri branju datoteke (FileReader error)."));
+    reader.readAsDataURL(file);
   });
 }
 
-function stop(e) {
-  e.preventDefault();
-  e.stopPropagation();
+function humanFileSize(bytes) {
+  const n = Number(bytes || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
 }
 
+function isSupportedFile(file) {
+  if (!file) return false;
+  const name = String(file.name || "").toLowerCase();
+  return name.endsWith(".csv") || name.endsWith(".xlsx") || name.endsWith(".xls");
+}
+
+// --- component ---
+
 export default function PointsImport({ open, onClose, onDone }) {
-  const inputRef = useRef(null);
-
+  const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [result, setResult] = useState(null);
 
-  const accept = useMemo(() => ".csv,.xlsx,.xls", []);
+  const fileInfo = useMemo(() => {
+    if (!file) return null;
+    return {
+      name: file.name || "file",
+      size: file.size || 0,
+      sizeLabel: humanFileSize(file.size || 0),
+      supported: isSupportedFile(file),
+    };
+  }, [file]);
 
-  async function handleFile(file) {
-    if (!file) return;
-
-    setErr("");
-    setMsg("");
-
-    const ext = String(file.name || "").toLowerCase();
-    if (!ext.endsWith(".csv") && !ext.endsWith(".xlsx") && !ext.endsWith(".xls")) {
-      setErr("Dovoli samo .csv ali .xlsx/.xls");
-      return;
+  // reset state whenever modal opens/closes
+  useEffect(() => {
+    if (!open) {
+      setFile(null);
+      setBusy(false);
+      setErr("");
+      setResult(null);
     }
+  }, [open]);
 
-    setBusy(true);
+  async function handleImport() {
     try {
-      const b64 = await fileToBase64(file);
+      setErr("");
+      setResult(null);
 
-      // IMPORTANT: endpoint mora biti enak kot v backendu
-      const out = await api("/ld/points/import-file", {
+      if (!file) {
+        setErr("Najprej izberi CSV ali Excel datoteko.");
+        return;
+      }
+
+      if (!isSupportedFile(file)) {
+        setErr("Podprto: .csv ali .xlsx/.xls");
+        return;
+      }
+
+      setBusy(true);
+
+      const contentBase64 = await fileToBase64(file);
+
+      // IMPORTANT:
+      // Če si v backend dodal alias route, lahko ostane /ld/points/import
+      // Če ne, uporabi /ld/points/import-file
+      const data = await api("/ld/points/import", {
         method: "POST",
-        body: { filename: file.name, contentBase64: b64 },
+        body: {
+          filename: file.name,
+          contentBase64,
+        },
       });
 
-      setMsg(`Uvoz OK — processed: ${out.processed}, skipped: ${out.skipped}`);
-      onDone?.();
+      setResult(data);
+
+      // trigger refresh in parent (BoundaryMap remount)
+      if (typeof onDone === "function") {
+        await onDone();
+      }
     } catch (e) {
-      setErr(e?.message || String(e));
+      setErr(String(e?.message || e));
     } finally {
       setBusy(false);
     }
   }
 
-  function onPickClick() {
-    // mora biti direct user action -> click handler
-    inputRef.current?.click();
-  }
-
-  function onInputChange(e) {
-    const f = e.target.files?.[0];
-    // reset, da lahko izbereš isto datoteko še enkrat
-    e.target.value = "";
-    handleFile(f);
-  }
-
-  function onDrop(e) {
-    stop(e);
-    const f = e.dataTransfer?.files?.[0];
-    handleFile(f);
+  function handleClose() {
+    if (busy) return;
+    if (typeof onClose === "function") onClose();
   }
 
   if (!open) return null;
 
   return (
     <div
-      className="modal-backdrop"
-      onClick={onClose}
-      style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
+      onMouseDown={handleClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 9999,
+      }}
     >
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(720px, 96vw)" }}>
-        <h3 className="modal-title">Uvozi točke (CSV/XLSX)</h3>
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: "min(720px, 100%)",
+          background: "#fff",
+          borderRadius: 14,
+          padding: 16,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900 }}>Uvozi točke (CSV / Excel)</div>
+            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8, lineHeight: 1.35 }}>
+              Datoteka mora imeti stolpce: <b>pointId</b>, <b>ldId</b>, <b>lat</b>, <b>lng</b>.
+              <br />
+              Ostalo opcijsko: ldIme, type, name, notes, status, source.
+              <br />
+              Anti-dupliranje: isti <b>ldId__pointId</b> se samo posodobi (ne naredi nove točke).
+              <br />
+              Dostop: <b>super</b> only.
+            </div>
+          </div>
 
-        <div className="page-sub" style={{ marginBottom: 10 }}>
-          Uvozi se dela kot <b>SUPER</b> za trenutno izbrano LD (switch-ld).
-          <br />
-          Anti-duplicate: <b>docId = ldId__pointId</b> (isti pointId se samo posodobi).
+          <button className="btn-mini" onClick={handleClose} disabled={busy}>
+            Zapri
+          </button>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8 }}>Izberi datoteko</div>
+
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0] || null;
+              setFile(f);
+              setErr("");
+              setResult(null);
+            }}
+          />
+
+          {fileInfo ? (
+            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85 }}>
+              Izbrano: <b>{fileInfo.name}</b> ({fileInfo.sizeLabel}){" "}
+              {!fileInfo.supported ? <span style={{ color: "#a00", fontWeight: 900 }}>— napačen format</span> : null}
+            </div>
+          ) : (
+            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.65 }}>Ni izbrane datoteke.</div>
+          )}
         </div>
 
         {err ? (
-          <div className="error" style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid #ffd0d0",
+              background: "#fff1f1",
+              color: "#7a1212",
+              fontWeight: 800,
+            }}
+          >
             {err}
           </div>
         ) : null}
 
-        {msg ? (
-          <div className="pin-box" style={{ marginBottom: 10 }}>
-            {msg}
+        {result ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid #b7f2c1",
+              background: "#f0fff3",
+              color: "#0b4d1a",
+            }}
+          >
+            <div style={{ fontWeight: 900 }}>Import OK</div>
+            <div style={{ marginTop: 6, fontSize: 13 }}>
+              processed: <b>{result.processed ?? "?"}</b> &nbsp;|&nbsp; skipped: <b>{result.skipped ?? "?"}</b>
+              <br />
+              {result.message ? (
+                <>
+                  message: <b>{result.message}</b>
+                </>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
-        <input ref={inputRef} type="file" accept={accept} style={{ display: "none" }} onChange={onInputChange} />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
+          <button className="btn-mini" onClick={handleClose} disabled={busy}>
+            Zapri
+          </button>
 
-        <div
-          onDragOver={stop}
-          onDrop={onDrop}
-          style={{
-            border: "2px dashed rgba(107,78,46,.35)",
-            borderRadius: 14,
-            padding: 18,
-            background: "rgba(255,255,255,.7)",
-          }}
-        >
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>Klikni ali dropaj datoteko</div>
-          <div style={{ opacity: 0.75, fontSize: 13 }}>Dovoljene: .csv, .xlsx, .xls</div>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-            <button className="btn-mini" onClick={onPickClick} disabled={busy}>
-              {busy ? "Uvažam..." : "Izberi datoteko"}
-            </button>
-
-            <button className="btn-mini" onClick={onClose} style={{ opacity: 0.85 }} disabled={busy}>
-              Zapri
-            </button>
-          </div>
+          <button
+            className="btn-mini"
+            onClick={handleImport}
+            disabled={busy || !file || (fileInfo ? !fileInfo.supported : true)}
+            style={{
+              opacity: busy || !file || (fileInfo ? !fileInfo.supported : true) ? 0.6 : 1,
+              fontWeight: 900,
+            }}
+          >
+            {busy ? "Uvažam..." : "Uvozi"}
+          </button>
         </div>
       </div>
     </div>

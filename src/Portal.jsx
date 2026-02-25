@@ -6,14 +6,16 @@ import UsersPage from "./UsersPage.jsx";
 import HuntLogsPage from "./HuntLogsPage.jsx";
 import ActiveHuntsPage from "./ActiveHuntsPage.jsx";
 import KmlMejePage from "./KmlMejePage.jsx";
-import OdvzemPage from "./OdvzemPage.jsx"; // ✅ NOVO
+import OdvzemPage from "./OdvzemPage.jsx";
+import EventsPage from "./EventsPage.jsx"; // ✅ NOVO
 
 const NAV = [
   { key: "home", label: "Domov" },
+  { key: "events", label: "Dogodki" },
   { key: "active", label: "Aktivni lov" },
   { key: "users", label: "Uporabniki" },
   { key: "logs", label: "Dnevniki lova" },
-  { key: "odvzem", label: "Plan odvzema" }, // ✅ NOVO
+  { key: "odvzem", label: "Plan odvzema" },
   { key: "kml", label: "KML / meje" },
   { key: "docs", label: "Dokumenti" },
 ];
@@ -40,9 +42,7 @@ export default function Portal({ onLogout }) {
   const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
 
   // ✅ active LD: primarno dashboard
-  const activeLdId = useMemo(() => {
-    return String(dash?.ldId || me?.ldId || "").trim();
-  }, [dash?.ldId, me?.ldId]);
+  const activeLdId = useMemo(() => String(dash?.ldId || me?.ldId || "").trim(), [dash?.ldId, me?.ldId]);
 
   // watch viewport changes (mobile/desktop)
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function Portal({ onLogout }) {
     const onChange = () => {
       const m = mq.matches;
       setIsMobile(m);
-      if (!m) setMenuOpen(false); // ko gre na desktop, zapri drawer
+      if (!m) setMenuOpen(false);
     };
 
     mq.addEventListener?.("change", onChange);
@@ -167,11 +167,7 @@ export default function Portal({ onLogout }) {
             </div>
 
             <div className="brand-sub">
-              {dash?.ldName
-                ? `LD: ${dash.ldName} (${dash.ldId})`
-                : activeLdId
-                ? `LD: ${activeLdId}`
-                : "Nalagam..."}
+              {dash?.ldName ? `LD: ${dash.ldName} (${dash.ldId})` : activeLdId ? `LD: ${activeLdId}` : "Nalagam..."}
             </div>
           </div>
         </div>
@@ -218,11 +214,7 @@ export default function Portal({ onLogout }) {
 
             <div className="drawer-body">
               {NAV.map((n) => (
-                <button
-                  key={n.key}
-                  className={"navbtn" + (tab === n.key ? " active" : "")}
-                  onClick={() => goTab(n.key)}
-                >
+                <button key={n.key} className={"navbtn" + (tab === n.key ? " active" : "")} onClick={() => goTab(n.key)}>
                   <span>{n.label}</span>
                   <span style={{ opacity: 0.5 }}>›</span>
                 </button>
@@ -240,11 +232,7 @@ export default function Portal({ onLogout }) {
             <div className="nav-title">Meni</div>
 
             {NAV.map((n) => (
-              <button
-                key={n.key}
-                className={"navbtn" + (tab === n.key ? " active" : "")}
-                onClick={() => goTab(n.key)}
-              >
+              <button key={n.key} className={"navbtn" + (tab === n.key ? " active" : "")} onClick={() => goTab(n.key)}>
                 <span>{n.label}</span>
                 <span style={{ opacity: 0.5 }}>›</span>
               </button>
@@ -259,7 +247,8 @@ export default function Portal({ onLogout }) {
 
           {err && <div className="error">{err}</div>}
 
-          {tab === "home" && <HomePage dash={dash} onGo={goTab} />}
+          {tab === "home" && <HomePage dash={dash} onGo={goTab} me={me} />}
+          {tab === "events" && <EventsPage me={me} onBackHome={() => goTab("home")} />}
           {tab === "active" && <ActiveHuntsPage />}
           {tab === "users" && <UsersPage />}
           {tab === "logs" && <HuntLogsPage />}
@@ -278,9 +267,12 @@ export default function Portal({ onLogout }) {
   );
 }
 
-function HomePage({ dash, onGo }) {
+/* ================= HOME PAGE ================= */
+
+function HomePage({ dash, onGo, me }) {
   return (
     <>
+      {/* kartice */}
       <div className="grid">
         <Stat title="Uporabniki" value={dash?.usersCount ?? "—"} desc="Število članov v sistemu" />
         <Stat title="Dnevniki" value={dash?.huntsThisMonth ?? "—"} desc="Vnosi v tem mesecu" />
@@ -288,9 +280,11 @@ function HomePage({ dash, onGo }) {
         <Stat title="Zadnja sinhronizacija" value={fmt(dash?.lastSync)} desc="Stanje sistema" />
       </div>
 
+      {/* ✅ HITRE AKCIJE NA VRHU */}
       <div style={{ marginTop: 16 }} className="stat">
         <h4>Hitre akcije</h4>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Quick label="Dogodki" onClick={() => onGo("events")} />
           <Quick label="Aktivni lov" onClick={() => onGo("active")} />
           <Quick label="Uporabniki" onClick={() => onGo("users")} />
           <Quick label="Dnevniki lova" onClick={() => onGo("logs")} />
@@ -299,9 +293,92 @@ function HomePage({ dash, onGo }) {
           <Quick label="Dokumenti" onClick={() => onGo("docs")} />
         </div>
       </div>
+
+      {/* ✅ DOGODKI ČISTO NA DNU */}
+      <div style={{ marginTop: 16 }} className="stat">
+        <EventsPreview me={me} onGo={() => onGo("events")} />
+      </div>
     </>
   );
 }
+
+/* ================= EVENTS PREVIEW (HOME) ================= */
+
+function EventsPreview({ me, onGo }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function load() {
+      setLoading(true);
+      setErr("");
+      try {
+        const out = await api(`/ld/events?future=1&limit=3`);
+        if (!alive) return;
+        setEvents(Array.isArray(out?.events) ? out.events : []);
+      } catch (e) {
+        if (!alive) return;
+        setEvents([]);
+        setErr(e?.message || String(e));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [me?.ldId]);
+
+  return (
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h4 style={{ marginBottom: 4 }}>Dogodki</h4>
+          <div className="desc">Naslednji dogodki v LD (občni zbor, strelske tekme, sestanki...).</div>
+        </div>
+
+        <button className="btn-mini" onClick={onGo}>
+          Poglej vse
+        </button>
+      </div>
+
+      {err && (
+        <div className="error" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
+          {err}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10 }}>
+        {loading ? (
+          <div className="desc">Nalagam...</div>
+        ) : events.length === 0 ? (
+          <div className="desc">Ni dogodkov.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+            {events.map((e) => (
+              <div
+                key={e.id}
+                className="login-card"
+                style={{ padding: 14, border: "1px solid rgba(107,78,46,.18)", background: "rgba(255,255,255,.70)" }}
+              >
+                <div style={{ fontWeight: 950, color: "#6B4E2E" }}>{e.title || "—"}</div>
+                <div style={{ marginTop: 6, fontWeight: 900 }}>{fmt(e.startsAt)}</div>
+                <div style={{ marginTop: 4, opacity: 0.75 }}>{e.location || "—"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ================= UI HELPERS ================= */
 
 function Stat({ title, value, desc }) {
   return (
@@ -335,7 +412,7 @@ function Quick({ label, onClick }) {
 function fmt(iso) {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleString();
+    return new Date(iso).toLocaleString("sl-SI");
   } catch {
     return "—";
   }
@@ -343,6 +420,8 @@ function fmt(iso) {
 
 function titleFor(tab) {
   switch (tab) {
+    case "events":
+      return "Dogodki";
     case "active":
       return "Aktivni lov";
     case "users":
@@ -362,6 +441,8 @@ function titleFor(tab) {
 
 function subtitleFor(tab) {
   switch (tab) {
+    case "events":
+      return "Dogodki in obvestila lovske družine.";
     case "active":
       return "Kdo je trenutno na lovu (z lokacijo, če je na voljo).";
     case "users":

@@ -18,6 +18,7 @@ export default function KmlMejePage({ dash, me }) {
 
   const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
 
+  const ldId = useMemo(() => String(dash?.ldId || "").trim(), [dash?.ldId]);
   const ldSlug = useMemo(() => toSlug(dash?.ldId), [dash?.ldId]);
 
   useEffect(() => {
@@ -46,6 +47,9 @@ export default function KmlMejePage({ dash, me }) {
   }, [manifest, ldSlug]);
 
   const geoJsonUrl = hit?.geojsonUrl || null;
+
+  // ✅ key naj vključuje ldId + refreshKey, da se BoundaryMap remounta ob switch-ld in importu
+  const mapKey = useMemo(() => `${ldId || "no-ld"}__${refreshKey}`, [ldId, refreshKey]);
 
   return (
     <div>
@@ -82,7 +86,12 @@ export default function KmlMejePage({ dash, me }) {
       </div>
 
       {geoJsonUrl ? (
-        <BoundaryMap key={refreshKey} geoJsonUrl={geoJsonUrl} />
+        <BoundaryMap
+          key={mapKey}
+          geoJsonUrl={geoJsonUrl}
+          ldId={ldId}
+          reloadKey={refreshKey}
+        />
       ) : (
         !err && (
           <div className="stat">
@@ -96,7 +105,7 @@ export default function KmlMejePage({ dash, me }) {
         open={showImport}
         onClose={() => setShowImport(false)}
         onDone={() => {
-          // trigger reload points (BoundaryMap load points runs on mount)
+          // trigger reload points (BoundaryMap remount)
           setRefreshKey((k) => k + 1);
         }}
       />
