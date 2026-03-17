@@ -7,7 +7,8 @@ import HuntLogsPage from "./HuntLogsPage.jsx";
 import ActiveHuntsPage from "./ActiveHuntsPage.jsx";
 import KmlMejePage from "./KmlMejePage.jsx";
 import OdvzemPage from "./OdvzemPage.jsx";
-import EventsPage from "./EventsPage.jsx"; // ✅ NOVO
+import EventsPage from "./EventsPage.jsx";
+import Footer from "./components/Footer.jsx";
 
 const NAV = [
   { key: "home", label: "Domov" },
@@ -34,17 +35,19 @@ export default function Portal({ onLogout }) {
   const [tab, setTab] = useState("home");
   const [busyLd, setBusyLd] = useState(false);
 
-  // ✅ Mobile menu (drawer)
   const [isMobile, setIsMobile] = useState(() => isMobileNow());
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ✅ super samo po role
-  const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
+  const isSuper = useMemo(() => {
+    const r = String(me?.role || "").trim();
+    return r === "super" || r === "admin";
+  }, [me?.role]);
 
-  // ✅ active LD: primarno dashboard
-  const activeLdId = useMemo(() => String(dash?.ldId || me?.ldId || "").trim(), [dash?.ldId, me?.ldId]);
+  const activeLdId = useMemo(
+    () => String(dash?.ldId || me?.ldId || "").trim(),
+    [dash?.ldId, me?.ldId]
+  );
 
-  // watch viewport changes (mobile/desktop)
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
     const onChange = () => {
@@ -57,7 +60,6 @@ export default function Portal({ onLogout }) {
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
 
-  // ESC to close menu
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => {
@@ -67,14 +69,12 @@ export default function Portal({ onLogout }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [menuOpen]);
 
-  // 1) load /auth/me
   useEffect(() => {
     api("/auth/me")
       .then((x) => setMe(x.user || null))
       .catch(() => setMe(null));
   }, []);
 
-  // 2) load dashboard
   useEffect(() => {
     setErr("");
     api("/ld/dashboard")
@@ -82,7 +82,6 @@ export default function Portal({ onLogout }) {
       .catch((e) => setErr(e.message));
   }, []);
 
-  // 3) super -> load lds (ko me pride)
   useEffect(() => {
     if (!isSuper) {
       setLds([]);
@@ -126,143 +125,184 @@ export default function Portal({ onLogout }) {
   }
 
   return (
-    <div className="app">
-      {/* TOP BAR */}
-      <div className="appbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* ✅ Mobile hamburger */}
-          {isMobile && (
-            <button
-              className="btn-ghost"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Odpri meni"
-              title="Meni"
-              style={{ padding: "8px 10px" }}
-            >
-              ☰
-            </button>
-          )}
-
-          <div>
-            <div className="brand-left">
-              <span className="tree">🌲</span>
-              <span>ROG</span>
-
-              {isSuper && (
-                <span
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 12,
-                    fontWeight: 900,
-                    padding: "4px 8px",
-                    borderRadius: 999,
-                    border: "1px solid rgba(107,78,46,.35)",
-                    background: "rgba(255,255,255,.6)",
-                    color: "#6B4E2E",
-                  }}
+    <div className="portal-layout">
+      <div className="portal-main">
+        <div className="app">
+          {/* TOP BAR */}
+          <div className="appbar">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {isMobile && (
+                <button
+                  className="btn-ghost"
+                  onClick={() => setMenuOpen(true)}
+                  aria-label="Odpri meni"
+                  title="Meni"
+                  style={{ padding: "8px 10px" }}
                 >
-                  ADMIN
-                </span>
-              )}
-            </div>
-
-            <div className="brand-sub">
-              {dash?.ldName ? `LD: ${dash.ldName} (${dash.ldId})` : activeLdId ? `LD: ${activeLdId}` : "Nalagam..."}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {/* ✅ Dropdown se pokaže samo za super */}
-          {isSuper && (
-            <select
-              className="input"
-              style={{ height: 42, width: isMobile ? "min(320px, 70vw)" : 260, fontSize: 14 }}
-              value={activeLdId || ""}
-              onChange={(e) => switchLd(e.target.value)}
-              title="Preklop LD (admin)"
-              disabled={busyLd}
-            >
-              <option value="" disabled>
-                {lds.length ? "Izberi LD…" : "Nalagam LD…"}
-              </option>
-
-              {lds.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.name}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button className="btn-mini" onClick={logout}>
-            Odjava
-          </button>
-        </div>
-      </div>
-
-      {/* ✅ Mobile drawer overlay */}
-      {isMobile && menuOpen && (
-        <div className="drawer-backdrop" onMouseDown={() => setMenuOpen(false)} role="presentation">
-          <div className="drawer" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Meni">
-            <div className="drawer-head">
-              <div className="drawer-title">Meni</div>
-              <button className="btn-ghost" onClick={() => setMenuOpen(false)} aria-label="Zapri meni">
-                ✕
-              </button>
-            </div>
-
-            <div className="drawer-body">
-              {NAV.map((n) => (
-                <button key={n.key} className={"navbtn" + (tab === n.key ? " active" : "")} onClick={() => goTab(n.key)}>
-                  <span>{n.label}</span>
-                  <span style={{ opacity: 0.5 }}>›</span>
+                  ☰
                 </button>
-              ))}
+              )}
+
+              <div>
+                <div className="brand-left">
+                  <span className="tree">🌲</span>
+                  <span>ROG</span>
+
+                  {isSuper && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        fontSize: 12,
+                        fontWeight: 900,
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(107,78,46,.35)",
+                        background: "rgba(255,255,255,.6)",
+                        color: "#6B4E2E",
+                      }}
+                    >
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+
+                <div className="brand-sub">
+                  {dash?.ldName
+                    ? `LD: ${dash.ldName} (${dash.ldId})`
+                    : activeLdId
+                    ? `LD: ${activeLdId}`
+                    : "Nalagam..."}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                justifyContent: "flex-end",
+              }}
+            >
+              {isSuper && (
+                <select
+                  className="input"
+                  style={{
+                    height: 42,
+                    width: isMobile ? "min(320px, 70vw)" : 260,
+                    fontSize: 14,
+                  }}
+                  value={activeLdId || ""}
+                  onChange={(e) => switchLd(e.target.value)}
+                  title="Preklop LD (admin)"
+                  disabled={busyLd}
+                >
+                  <option value="" disabled>
+                    {lds.length ? "Izberi LD…" : "Nalagam LD…"}
+                  </option>
+
+                  {lds.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <button className="btn-mini" onClick={logout}>
+                Odjava
+              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* LAYOUT */}
-      <div className="shell">
-        {/* SIDEBAR (desktop only) */}
-        {!isMobile && (
-          <aside className="sidebar">
-            <div className="nav-title">Meni</div>
+          {/* MOBILE DRAWER */}
+          {isMobile && menuOpen && (
+            <div
+              className="drawer-backdrop"
+              onMouseDown={() => setMenuOpen(false)}
+              role="presentation"
+            >
+              <div
+                className="drawer"
+                onMouseDown={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-label="Meni"
+              >
+                <div className="drawer-head">
+                  <div className="drawer-title">Meni</div>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="Zapri meni"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-            {NAV.map((n) => (
-              <button key={n.key} className={"navbtn" + (tab === n.key ? " active" : "")} onClick={() => goTab(n.key)}>
-                <span>{n.label}</span>
-                <span style={{ opacity: 0.5 }}>›</span>
-              </button>
-            ))}
-          </aside>
-        )}
-
-        {/* CONTENT */}
-        <main className="content">
-          <h2 className="page-title">{titleFor(tab)}</h2>
-          <p className="page-sub">{subtitleFor(tab)}</p>
-
-          {err && <div className="error">{err}</div>}
-
-          {tab === "home" && <HomePage dash={dash} onGo={goTab} me={me} />}
-          {tab === "events" && <EventsPage me={me} onBackHome={() => goTab("home")} />}
-          {tab === "active" && <ActiveHuntsPage />}
-          {tab === "users" && <UsersPage />}
-          {tab === "logs" && <HuntLogsPage />}
-          {tab === "odvzem" && <OdvzemPage me={me} />}
-          {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
-
-          {tab === "docs" && (
-            <div className="stat">
-              <h4>V razvoju</h4>
-              <div className="desc">Ta modul je MVP placeholder.</div>
+                <div className="drawer-body">
+                  {NAV.map((n) => (
+                    <button
+                      key={n.key}
+                      className={"navbtn" + (tab === n.key ? " active" : "")}
+                      onClick={() => goTab(n.key)}
+                    >
+                      <span>{n.label}</span>
+                      <span style={{ opacity: 0.5 }}>›</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
-        </main>
+
+          {/* MAIN */}
+          <div className="shell">
+            {!isMobile && (
+              <aside className="sidebar">
+                <div className="nav-title">Meni</div>
+
+                {NAV.map((n) => (
+                  <button
+                    key={n.key}
+                    className={"navbtn" + (tab === n.key ? " active" : "")}
+                    onClick={() => goTab(n.key)}
+                  >
+                    <span>{n.label}</span>
+                    <span style={{ opacity: 0.5 }}>›</span>
+                  </button>
+                ))}
+              </aside>
+            )}
+
+            <main className="content">
+              <h2 className="page-title">{titleFor(tab)}</h2>
+              <p className="page-sub">{subtitleFor(tab)}</p>
+
+              {err && <div className="error">{err}</div>}
+
+              {tab === "home" && <HomePage dash={dash} onGo={goTab} me={me} />}
+              {tab === "events" && (
+                <EventsPage me={me} onBackHome={() => goTab("home")} />
+              )}
+              {tab === "active" && <ActiveHuntsPage />}
+              {tab === "users" && <UsersPage />}
+              {tab === "logs" && <HuntLogsPage />}
+              {tab === "odvzem" && <OdvzemPage me={me} />}
+              {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
+
+              {tab === "docs" && (
+                <div className="stat">
+                  <h4>V razvoju</h4>
+                  <div className="desc">Ta modul je MVP placeholder.</div>
+                </div>
+              )}
+            </main>
+          </div>
+        </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
@@ -272,15 +312,29 @@ export default function Portal({ onLogout }) {
 function HomePage({ dash, onGo, me }) {
   return (
     <>
-      {/* kartice */}
       <div className="grid">
-        <Stat title="Uporabniki" value={dash?.usersCount ?? "—"} desc="Število članov v sistemu" />
-        <Stat title="Dnevniki" value={dash?.huntsThisMonth ?? "—"} desc="Vnosi v tem mesecu" />
-        <Stat title="LD ID" value={dash?.ldId ?? "—"} desc="Identifikator lovske družine" />
-        <Stat title="Zadnja sinhronizacija" value={fmt(dash?.lastSync)} desc="Stanje sistema" />
+        <Stat
+          title="Uporabniki"
+          value={dash?.usersCount ?? "—"}
+          desc="Število članov v sistemu"
+        />
+        <Stat
+          title="Dnevniki"
+          value={dash?.huntsThisMonth ?? "—"}
+          desc="Vnosi v tem mesecu"
+        />
+        <Stat
+          title="LD ID"
+          value={dash?.ldId ?? "—"}
+          desc="Identifikator lovske družine"
+        />
+        <Stat
+          title="Zadnja sinhronizacija"
+          value={fmt(dash?.lastSync)}
+          desc="Stanje sistema"
+        />
       </div>
 
-      {/* ✅ HITRE AKCIJE NA VRHU */}
       <div style={{ marginTop: 16 }} className="stat">
         <h4>Hitre akcije</h4>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -294,7 +348,6 @@ function HomePage({ dash, onGo, me }) {
         </div>
       </div>
 
-      {/* ✅ DOGODKI ČISTO NA DNU */}
       <div style={{ marginTop: 16 }} className="stat">
         <EventsPreview me={me} onGo={() => onGo("events")} />
       </div>
@@ -302,7 +355,7 @@ function HomePage({ dash, onGo, me }) {
   );
 }
 
-/* ================= EVENTS PREVIEW (HOME) ================= */
+/* ================= EVENTS PREVIEW ================= */
 
 function EventsPreview({ me, onGo }) {
   const [loading, setLoading] = useState(false);
@@ -336,10 +389,20 @@ function EventsPreview({ me, onGo }) {
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
           <h4 style={{ marginBottom: 4 }}>Dogodki</h4>
-          <div className="desc">Naslednji dogodki v LD (občni zbor, strelske tekme, sestanki...).</div>
+          <div className="desc">
+            Naslednji dogodki v LD (občni zbor, strelske tekme, sestanki...).
+          </div>
         </div>
 
         <button className="btn-mini" onClick={onGo}>
@@ -359,16 +422,32 @@ function EventsPreview({ me, onGo }) {
         ) : events.length === 0 ? (
           <div className="desc">Ni dogodkov.</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: 12,
+            }}
+          >
             {events.map((e) => (
               <div
                 key={e.id}
                 className="login-card"
-                style={{ padding: 14, border: "1px solid rgba(107,78,46,.18)", background: "rgba(255,255,255,.70)" }}
+                style={{
+                  padding: 14,
+                  border: "1px solid rgba(107,78,46,.18)",
+                  background: "rgba(255,255,255,.70)",
+                }}
               >
-                <div style={{ fontWeight: 950, color: "#6B4E2E" }}>{e.title || "—"}</div>
-                <div style={{ marginTop: 6, fontWeight: 900 }}>{fmt(e.startsAt)}</div>
-                <div style={{ marginTop: 4, opacity: 0.75 }}>{e.location || "—"}</div>
+                <div style={{ fontWeight: 950, color: "#6B4E2E" }}>
+                  {e.title || "—"}
+                </div>
+                <div style={{ marginTop: 6, fontWeight: 900 }}>
+                  {fmt(e.startsAt)}
+                </div>
+                <div style={{ marginTop: 4, opacity: 0.75 }}>
+                  {e.location || "—"}
+                </div>
               </div>
             ))}
           </div>
