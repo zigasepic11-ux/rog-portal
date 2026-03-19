@@ -9,6 +9,8 @@ import KmlMejePage from "./KmlMejePage.jsx";
 import OdvzemPage from "./OdvzemPage.jsx";
 import EventsPage from "./EventsPage.jsx";
 import Footer from "./components/Footer.jsx";
+import TermsPage from "./TermsPage.jsx";
+import PrivacyPage from "./PrivacyPage.jsx";
 
 const NAV = [
   { key: "home", label: "Domov" },
@@ -19,6 +21,7 @@ const NAV = [
   { key: "odvzem", label: "Plan odvzema" },
   { key: "kml", label: "KML / meje" },
   { key: "docs", label: "Dokumenti" },
+  
 ];
 
 function isMobileNow() {
@@ -290,6 +293,8 @@ export default function Portal({ onLogout }) {
               {tab === "logs" && <HuntLogsPage />}
               {tab === "odvzem" && <OdvzemPage me={me} />}
               {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
+              {tab === "terms" && <TermsPage />}
+              {tab === "privacy" && <PrivacyPage />}
 
               {tab === "docs" && (
                 <div className="stat">
@@ -302,7 +307,7 @@ export default function Portal({ onLogout }) {
         </div>
       </div>
 
-      <Footer />
+      <Footer onNavigate={goTab} />
     </div>
   );
 }
@@ -513,6 +518,10 @@ function titleFor(tab) {
       return "KML / meje lovišča";
     case "docs":
       return "Dokumenti";
+    case "terms":
+      return "Pogoji uporabe";
+    case "privacy":
+      return "Zasebnost";
     default:
       return "Domov";
   }
@@ -534,6 +543,10 @@ function subtitleFor(tab) {
       return "Uvoz KML in status lovišča.";
     case "docs":
       return "Obrazci, priloge in dokumentacija.";
+    case "terms":
+      return "Pravila in pogoji uporabe sistema ROG.";
+    case "privacy":
+      return "Informacije o varstvu podatkov in zasebnosti uporabnikov.";
     default:
       return "Pregled stanja in hitre akcije.";
   }
