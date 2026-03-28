@@ -8,20 +8,22 @@ import ActiveHuntsPage from "./ActiveHuntsPage.jsx";
 import KmlMejePage from "./KmlMejePage.jsx";
 import OdvzemPage from "./OdvzemPage.jsx";
 import EventsPage from "./EventsPage.jsx";
+import WorkHoursPage from "./WorkHoursPage.jsx";
 import Footer from "./components/Footer.jsx";
 import TermsPage from "./TermsPage.jsx";
 import PrivacyPage from "./PrivacyPage.jsx";
+import DocumentsPage from "./DocumentsPage.jsx";
 
 const NAV = [
   { key: "home", label: "Domov" },
   { key: "events", label: "Dogodki" },
+  { key: "workhours", label: "Delovne ure" },
   { key: "active", label: "Aktivni lov" },
   { key: "users", label: "Uporabniki" },
   { key: "logs", label: "Dnevniki lova" },
   { key: "odvzem", label: "Plan odvzema" },
   { key: "kml", label: "KML / meje" },
   { key: "docs", label: "Dokumenti" },
-  
 ];
 
 function isMobileNow() {
@@ -131,7 +133,6 @@ export default function Portal({ onLogout }) {
     <div className="portal-layout">
       <div className="portal-main">
         <div className="app">
-          {/* TOP BAR */}
           <div className="appbar">
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {isMobile && (
@@ -219,7 +220,6 @@ export default function Portal({ onLogout }) {
             </div>
           </div>
 
-          {/* MOBILE DRAWER */}
           {isMobile && menuOpen && (
             <div
               className="drawer-backdrop"
@@ -259,7 +259,6 @@ export default function Portal({ onLogout }) {
             </div>
           )}
 
-          {/* MAIN */}
           <div className="shell">
             {!isMobile && (
               <aside className="sidebar">
@@ -288,6 +287,7 @@ export default function Portal({ onLogout }) {
               {tab === "events" && (
                 <EventsPage me={me} onBackHome={() => goTab("home")} />
               )}
+              {tab === "workhours" && <WorkHoursPage />}
               {tab === "active" && <ActiveHuntsPage />}
               {tab === "users" && <UsersPage />}
               {tab === "logs" && <HuntLogsPage />}
@@ -296,12 +296,7 @@ export default function Portal({ onLogout }) {
               {tab === "terms" && <TermsPage />}
               {tab === "privacy" && <PrivacyPage />}
 
-              {tab === "docs" && (
-                <div className="stat">
-                  <h4>V razvoju</h4>
-                  <div className="desc">Ta modul je MVP placeholder.</div>
-                </div>
-              )}
+              {tab === "docs" && <DocumentsPage me={me} onBackHome={() => goTab("home")} />}
             </main>
           </div>
         </div>
@@ -311,8 +306,6 @@ export default function Portal({ onLogout }) {
     </div>
   );
 }
-
-/* ================= HOME PAGE ================= */
 
 function HomePage({ dash, onGo, me }) {
   return (
@@ -344,6 +337,7 @@ function HomePage({ dash, onGo, me }) {
         <h4>Hitre akcije</h4>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Quick label="Dogodki" onClick={() => onGo("events")} />
+          <Quick label="Delovne ure" onClick={() => onGo("workhours")} />
           <Quick label="Aktivni lov" onClick={() => onGo("active")} />
           <Quick label="Uporabniki" onClick={() => onGo("users")} />
           <Quick label="Dnevniki lova" onClick={() => onGo("logs")} />
@@ -359,8 +353,6 @@ function HomePage({ dash, onGo, me }) {
     </>
   );
 }
-
-/* ================= EVENTS PREVIEW ================= */
 
 function EventsPreview({ me, onGo }) {
   const [loading, setLoading] = useState(false);
@@ -462,8 +454,6 @@ function EventsPreview({ me, onGo }) {
   );
 }
 
-/* ================= UI HELPERS ================= */
-
 function Stat({ title, value, desc }) {
   return (
     <div className="stat">
@@ -506,6 +496,8 @@ function titleFor(tab) {
   switch (tab) {
     case "events":
       return "Dogodki";
+    case "workhours":
+      return "Delovne ure";
     case "active":
       return "Aktivni lov";
     case "users":
@@ -531,6 +523,8 @@ function subtitleFor(tab) {
   switch (tab) {
     case "events":
       return "Dogodki in obvestila lovske družine.";
+    case "workhours":
+      return "Pregled planiranih in opravljenih delovnih ur članov.";
     case "active":
       return "Kdo je trenutno na lovu (z lokacijo, če je na voljo).";
     case "users":
