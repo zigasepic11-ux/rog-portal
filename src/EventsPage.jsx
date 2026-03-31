@@ -1,4 +1,3 @@
-// src/EventsPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 
@@ -32,12 +31,78 @@ function fileToBase64(file) {
 
 function niceErr(e) {
   const msg = e?.message || String(e || "");
-  // če api wrapper vrne JSON {error, detail}
   if (typeof e === "object" && e?.error) {
     const detail = e?.detail ? `\n${e.detail}` : "";
     return `${e.error}${detail}`;
   }
   return msg;
+}
+
+function getFileExtension(filename = "") {
+  const name = String(filename || "").trim().toLowerCase();
+  const idx = name.lastIndexOf(".");
+  if (idx < 0) return "";
+  return name.slice(idx + 1);
+}
+
+function isPreviewableAttachment(att) {
+  const filename = String(att?.filename || "").toLowerCase();
+  const mime = String(att?.mime || "").toLowerCase();
+  const ext = getFileExtension(filename);
+
+  if (mime.startsWith("image/")) return true;
+  if (mime === "application/pdf") return true;
+
+  return ["pdf", "png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"].includes(ext);
+}
+
+function openAttachment(att, setErr) {
+  const url = String(att?.url || "").trim();
+  const filename = String(att?.filename || "priloga").trim();
+
+  if (!url) {
+    setErr("Priloga nima URL-ja (manjka a.url).");
+    return;
+  }
+
+  const previewable = isPreviewableAttachment(att);
+
+  if (previewable) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "priloga";
+    a.target = "_blank";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function AttachmentIcon() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center" }}>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#6B4E2E"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21.44 11.05l-9.19 9.19a5.5 5.5 0 01-7.78-7.78l9.19-9.19a3.5 3.5 0 114.95 4.95l-9.2 9.19a1.5 1.5 0 01-2.12-2.12l8.49-8.48" />
+      </svg>
+    </span>
+  );
 }
 
 export default function EventsPage({ me, onBackHome }) {
@@ -47,13 +112,11 @@ export default function EventsPage({ me, onBackHome }) {
 
   const canEdit = useMemo(() => isStaffRole(me?.role), [me?.role]);
 
-  // create form
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
 
-  // attachments (optional)
   const [attachFile, setAttachFile] = useState(null);
 
   const [saving, setSaving] = useState(false);
@@ -91,7 +154,6 @@ export default function EventsPage({ me, onBackHome }) {
     setErr("");
 
     try {
-      // 1) ustvari event
       const startsIso = new Date(startsAt).toISOString();
       const created = await api("/ld/events", {
         method: "POST",
@@ -106,9 +168,7 @@ export default function EventsPage({ me, onBackHome }) {
       const eventId = created?.id;
       if (!eventId) throw new Error("Manjka id dogodka (backend ni vrnil id).");
 
-      // 2) če je priloga -> upload na /attachment
       if (attachFile) {
-        // basic size guard (10MB)
         if (attachFile.size > 10 * 1024 * 1024) {
           throw new Error("Datoteka je prevelika. Max 10MB.");
         }
@@ -125,14 +185,12 @@ export default function EventsPage({ me, onBackHome }) {
         });
       }
 
-      // reset form
       setTitle("");
       setStartsAt("");
       setLocation("");
       setDescription("");
       setAttachFile(null);
 
-      // reload list
       await load();
     } catch (e) {
       setErr(niceErr(e));
@@ -158,39 +216,6 @@ export default function EventsPage({ me, onBackHome }) {
     }
   }
 
-  async function importEventsFile() {
-    if (!canEdit) return;
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".csv,.json";
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-
-      const ok = window.confirm("Import dogodkov? (CSV/JSON)");
-      if (!ok) return;
-
-      setSaving(true);
-      setErr("");
-      try {
-        const b64 = await fileToBase64(file);
-        await api("/ld/events/import", {
-          method: "POST",
-          body: { filename: file.name, contentBase64: b64 },
-        });
-        await load();
-      } catch (e) {
-        setErr(niceErr(e));
-      } finally {
-        setSaving(false);
-      }
-    };
-
-    input.click();
-  }
-
   return (
     <div>
       <div className="stat" style={{ padding: 16 }}>
@@ -210,12 +235,6 @@ export default function EventsPage({ me, onBackHome }) {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {canEdit && (
-              <button className="btn-mini" onClick={importEventsFile} disabled={saving}>
-                Import (CSV/JSON)
-              </button>
-            )}
-
             {onBackHome && (
               <button className="btn-mini" onClick={onBackHome} disabled={saving}>
                 Nazaj
@@ -230,7 +249,6 @@ export default function EventsPage({ me, onBackHome }) {
           </div>
         )}
 
-        {/* CREATE FORM */}
         {canEdit && (
           <div
             className="login-card"
@@ -318,7 +336,7 @@ export default function EventsPage({ me, onBackHome }) {
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
                 />
                 <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
-                  (PDF/DOC/DOCX – npr. vabilo, razpis, zapisnik… max 10MB)
+                  PDF in slike se odprejo v brskalniku. Word/Excel datoteke se prenesejo. Max 10MB.
                 </div>
               </div>
 
@@ -329,7 +347,6 @@ export default function EventsPage({ me, onBackHome }) {
           </div>
         )}
 
-        {/* LIST */}
         <div style={{ marginTop: 14 }}>
           {loading ? (
             <div className="desc">Nalagam...</div>
@@ -378,40 +395,48 @@ export default function EventsPage({ me, onBackHome }) {
                             <span style={{ opacity: 0.6 }}>—</span>
                           ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              {atts.map((a, idx) => (
-                                <a
-                                  key={`${e.id}_${idx}`}
-                                  href={a?.url || "#"}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    padding: "8px 10px",
-                                    borderRadius: 12,
-                                    border: "1px solid rgba(107,78,46,.25)",
-                                    background: "rgba(255,255,255,.7)",
-                                    color: "#6B4E2E",
-                                    fontWeight: 900,
-                                    textDecoration: "none",
-                                    width: "fit-content",
-                                    maxWidth: "100%",
-                                  }}
-                                  title={a?.filename || "Priloga"}
-                                  onClick={(ev) => {
-                                    if (!a?.url) {
-                                      ev.preventDefault();
-                                      setErr("Priloga nima URL-ja (manjka a.url).");
-                                    }
-                                  }}
-                                >
-                                  📎 Odpri
-                                  <span style={{ fontWeight: 700, opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    {a?.filename ? `(${a.filename})` : ""}
-                                  </span>
-                                </a>
-                              ))}
+                              {atts.map((a, idx) => {
+                                const previewable = isPreviewableAttachment(a);
+
+                                return (
+                                  <button
+                                    key={`${e.id}_${idx}`}
+                                    type="button"
+                                    onClick={() => openAttachment(a, setErr)}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      padding: "8px 10px",
+                                      borderRadius: 12,
+                                      border: "1px solid rgba(107,78,46,.25)",
+                                      background: "rgba(255,255,255,.7)",
+                                      color: "#6B4E2E",
+                                      fontWeight: 900,
+                                      textDecoration: "none",
+                                      width: "fit-content",
+                                      maxWidth: "100%",
+                                      cursor: "pointer",
+                                    }}
+                                    title={a?.filename || "Priloga"}
+                                  >
+                                    <AttachmentIcon />
+                                    <span>{previewable ? "Odpri" : "Prenesi"}</span>
+                                    <span
+                                      style={{
+                                        fontWeight: 700,
+                                        opacity: 0.75,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        maxWidth: 160,
+                                      }}
+                                    >
+                                      {a?.filename ? `(${a.filename})` : ""}
+                                    </span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </td>
