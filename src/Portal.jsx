@@ -9,6 +9,7 @@ import KmlMejePage from "./KmlMejePage.jsx";
 import OdvzemPage from "./OdvzemPage.jsx";
 import EventsPage from "./EventsPage.jsx";
 import WorkHoursPage from "./WorkHoursPage.jsx";
+import AssignmentsPage from "./AssignmentsPage.jsx";
 import Footer from "./components/Footer.jsx";
 import TermsPage from "./TermsPage.jsx";
 import PrivacyPage from "./PrivacyPage.jsx";
@@ -18,6 +19,7 @@ const NAV = [
   { key: "home", label: "Domov" },
   { key: "events", label: "Dogodki" },
   { key: "workhours", label: "Delovne ure" },
+  { key: "assignments", label: "Zadolžitve" },
   { key: "active", label: "Aktivni lov" },
   { key: "users", label: "Uporabniki" },
   { key: "logs", label: "Dnevniki lova" },
@@ -288,6 +290,7 @@ export default function Portal({ onLogout }) {
                 <EventsPage me={me} onBackHome={() => goTab("home")} />
               )}
               {tab === "workhours" && <WorkHoursPage />}
+              {tab === "assignments" && <AssignmentsPage />}
               {tab === "active" && <ActiveHuntsPage />}
               {tab === "users" && <UsersPage />}
               {tab === "logs" && <HuntLogsPage />}
@@ -295,8 +298,9 @@ export default function Portal({ onLogout }) {
               {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
               {tab === "terms" && <TermsPage />}
               {tab === "privacy" && <PrivacyPage />}
-
-              {tab === "docs" && <DocumentsPage me={me} onBackHome={() => goTab("home")} />}
+              {tab === "docs" && (
+                <DocumentsPage me={me} onBackHome={() => goTab("home")} />
+              )}
             </main>
           </div>
         </div>
@@ -338,6 +342,7 @@ function HomePage({ dash, onGo, me }) {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Quick label="Dogodki" onClick={() => onGo("events")} />
           <Quick label="Delovne ure" onClick={() => onGo("workhours")} />
+          <Quick label="Zadolžitve" onClick={() => onGo("assignments")} />
           <Quick label="Aktivni lov" onClick={() => onGo("active")} />
           <Quick label="Uporabniki" onClick={() => onGo("users")} />
           <Quick label="Dnevniki lova" onClick={() => onGo("logs")} />
@@ -498,6 +503,8 @@ function titleFor(tab) {
       return "Dogodki";
     case "workhours":
       return "Delovne ure";
+    case "assignments":
+      return "Zadolžitve";
     case "active":
       return "Aktivni lov";
     case "users":
@@ -525,6 +532,8 @@ function subtitleFor(tab) {
       return "Dogodki in obvestila lovske družine.";
     case "workhours":
       return "Pregled planiranih in opravljenih delovnih ur članov.";
+    case "assignments":
+      return "Dodeljevanje zadolžitev lovcem in pregled njihovih odgovornosti.";
     case "active":
       return "Kdo je trenutno na lovu (z lokacijo, če je na voljo).";
     case "users":
