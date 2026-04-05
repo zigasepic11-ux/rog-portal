@@ -1,4 +1,3 @@
-// src/WorkHoursPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 
@@ -49,6 +48,7 @@ export default function WorkHoursPage() {
   const [entryHours, setEntryHours] = useState({});
   const [entryNotes, setEntryNotes] = useState({});
   const [savingEntryHunterId, setSavingEntryHunterId] = useState("");
+  const [closingAction, setClosingAction] = useState(false);
 
   async function loadOverview() {
     setLoadingOverview(true);
@@ -207,6 +207,7 @@ export default function WorkHoursPage() {
 
   async function saveEntry(hunter) {
     if (!selectedAction?.id) return;
+    if (selectedAction?.status === "closed") return;
     setErr("");
 
     try {
@@ -227,6 +228,30 @@ export default function WorkHoursPage() {
       setErr(e.message);
     } finally {
       setSavingEntryHunterId("");
+    }
+  }
+
+  async function closeSelectedAction() {
+    if (!selectedAction?.id) return;
+    setErr("");
+
+    try {
+      setClosingAction(true);
+
+      await api(`/ld/work-actions/${encodeURIComponent(selectedAction.id)}/status`, {
+        method: "PATCH",
+        body: {
+          status: "closed",
+        },
+      });
+
+      const updated = { ...selectedAction, status: "closed" };
+      setSelectedAction(updated);
+      await loadActions();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setClosingAction(false);
     }
   }
 
@@ -502,7 +527,7 @@ export default function WorkHoursPage() {
                         className="btn-ghost"
                         onClick={() => setSelectedAction(a)}
                       >
-                        Vnesi ure
+                        {a.status === "closed" ? "Poglej" : "Vnesi ure"}
                       </button>
                     </td>
                   </tr>
@@ -528,7 +553,17 @@ export default function WorkHoursPage() {
           <>
             <div className="page-sub" style={{ marginBottom: 10 }}>
               Datum: {fmt(selectedAction.startsAt)} {selectedAction.location ? `• Lokacija: ${selectedAction.location}` : ""}
+              {" • "}
+              Status: <b>{selectedAction.status || "open"}</b>
             </div>
+
+            {selectedAction?.status !== "closed" && (
+              <div style={{ marginBottom: 12 }}>
+                <button className="btn-mini" onClick={closeSelectedAction} disabled={closingAction}>
+                  {closingAction ? "Zaključujem..." : "Zaključi akcijo"}
+                </button>
+              </div>
+            )}
 
             {loadingEntries ? (
               <div className="desc">Nalagam vnose...</div>
@@ -579,6 +614,7 @@ export default function WorkHoursPage() {
                                 min="0"
                                 step="0.5"
                                 value={currentHours}
+                                disabled={selectedAction?.status === "closed"}
                                 onChange={(e) =>
                                   setEntryHours((prev) => ({
                                     ...prev,
@@ -593,6 +629,7 @@ export default function WorkHoursPage() {
                               <input
                                 className="input"
                                 value={currentNotes}
+                                disabled={selectedAction?.status === "closed"}
                                 onChange={(e) =>
                                   setEntryNotes((prev) => ({
                                     ...prev,
@@ -625,9 +662,13 @@ export default function WorkHoursPage() {
                               <button
                                 className="btn-ghost"
                                 onClick={() => saveEntry(u)}
-                                disabled={savingEntryHunterId === u.code}
+                                disabled={savingEntryHunterId === u.code || selectedAction?.status === "closed"}
                               >
-                                {savingEntryHunterId === u.code ? "Shranjujem..." : "Shrani ure"}
+                                {selectedAction?.status === "closed"
+                                  ? "Akcija zaključena"
+                                  : savingEntryHunterId === u.code
+                                    ? "Shranjujem..."
+                                    : "Shrani ure"}
                               </button>
                             </td>
                           </tr>
