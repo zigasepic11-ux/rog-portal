@@ -155,7 +155,7 @@ export default function PointsImport({ open, onClose, onDone }) {
               <br />
               Anti-dupliranje: isti <b>ldId__pointId</b> se samo posodobi (ne naredi nove točke).
               <br />
-              Dostop: <b>super</b> only.
+              Dostop: <b>super, admin in moderator</b>.
             </div>
           </div>
 

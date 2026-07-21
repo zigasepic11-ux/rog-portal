@@ -5,7 +5,9 @@ import PointsImport from "./PointsImport.jsx";
 
 function toSlug(ldIdOrSlug) {
   if (!ldIdOrSlug) return null;
+
   const s = String(ldIdOrSlug).trim();
+
   return s.startsWith("ld_") ? s : `ld_${s}`;
 }
 
@@ -16,10 +18,26 @@ export default function KmlMejePage({ dash, me }) {
   const [showImport, setShowImport] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const isSuper = useMemo(() => String(me?.role || "") === "super", [me?.role]);
+  const role = useMemo(
+    () => String(me?.role || "").trim().toLowerCase(),
+    [me?.role]
+  );
 
-  const ldId = useMemo(() => String(dash?.ldId || "").trim(), [dash?.ldId]);
-  const ldSlug = useMemo(() => toSlug(dash?.ldId), [dash?.ldId]);
+  // Uvoz točk je dovoljen superju, adminu in moderatorju.
+  const canImportPoints = useMemo(
+    () => ["super", "admin", "moderator"].includes(role),
+    [role]
+  );
+
+  const ldId = useMemo(
+    () => String(dash?.ldId || "").trim(),
+    [dash?.ldId]
+  );
+
+  const ldSlug = useMemo(
+    () => toSlug(dash?.ldId),
+    [dash?.ldId]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -27,12 +45,24 @@ export default function KmlMejePage({ dash, me }) {
     (async () => {
       try {
         setErr("");
-        const res = await fetch("/boundaries/manifest.json", { cache: "no-store" });
-        if (!res.ok) throw new Error("Meje lovišča niso na voljo.");
+
+        const res = await fetch("/boundaries/manifest.json", {
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          throw new Error("Meje lovišča niso na voljo.");
+        }
+
         const json = await res.json();
-        if (!cancelled) setManifest(Array.isArray(json) ? json : []);
+
+        if (!cancelled) {
+          setManifest(Array.isArray(json) ? json : []);
+        }
       } catch (e) {
-        if (!cancelled) setErr(e?.message || String(e));
+        if (!cancelled) {
+          setErr(e?.message || String(e));
+        }
       }
     })();
 
@@ -43,18 +73,28 @@ export default function KmlMejePage({ dash, me }) {
 
   const hit = useMemo(() => {
     if (!manifest || !ldSlug) return null;
+
     return manifest.find((m) => m?.slug === ldSlug) || null;
   }, [manifest, ldSlug]);
 
   const geoJsonUrl = hit?.geojsonUrl || null;
 
-  // ✅ key naj vključuje ldId + refreshKey, da se BoundaryMap remounta ob switch-ld in importu
-  const mapKey = useMemo(() => `${ldId || "no-ld"}__${refreshKey}`, [ldId, refreshKey]);
+  const mapKey = useMemo(
+    () => `${ldId || "no-ld"}__${refreshKey}`,
+    [ldId, refreshKey]
+  );
 
   return (
     <div>
       <div className="stat" style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <h4>Meje lovišča</h4>
 
@@ -69,20 +109,29 @@ export default function KmlMejePage({ dash, me }) {
             </div>
           </div>
 
-          {isSuper ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button className="btn-mini" onClick={() => setShowImport(true)}>
+          {canImportPoints ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                alignItems: "center",
+              }}
+            >
+              <button
+                className="btn-mini"
+                onClick={() => setShowImport(true)}
+              >
                 Uvozi točke
               </button>
             </div>
           ) : null}
         </div>
 
-        {err && (
+        {err ? (
           <div className="error" style={{ marginTop: 10 }}>
             {err}
           </div>
-        )}
+        ) : null}
       </div>
 
       {geoJsonUrl ? (
@@ -96,7 +145,10 @@ export default function KmlMejePage({ dash, me }) {
         !err && (
           <div className="stat">
             <h4>Meja ni prikazana</h4>
-            <div className="desc">Za to lovišče meje trenutno niso na voljo.</div>
+
+            <div className="desc">
+              Za to lovišče meje trenutno niso na voljo.
+            </div>
           </div>
         )
       )}
@@ -105,7 +157,7 @@ export default function KmlMejePage({ dash, me }) {
         open={showImport}
         onClose={() => setShowImport(false)}
         onDone={() => {
-          // trigger reload points (BoundaryMap remount)
+          setShowImport(false);
           setRefreshKey((k) => k + 1);
         }}
       />
