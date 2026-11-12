@@ -1,35 +1,89 @@
 // src/UsersPage.jsx
 import { useEffect, useState } from "react";
 import { api } from "./api.js";
+import {
+  inviteMember,
+  listLdMembers,
+  deactivateMember,
+  reactivateMember,
+  changeMemberRole,
+  resendInvite,
+  setMemberBoardFlag,
+} from "./firebase.js";
+
+const STATUS_LABELS = {
+  enabled: "AKTIVEN",
+  disabled: "ONEMOGOČEN",
+  active: "AKTIVEN",
+  deactivated: "DEAKTIVIRAN",
+  invited: "POVABLJEN",
+  expired: "POTEKLO",
+  pending: "V TEKU",
+};
+
+function isActiveStatus(status) {
+  return status === "enabled" || status === "active";
+}
 
 export default function UsersPage() {
-  const [users, setUsers] = useState([]);
-  const [err, setErr] = useState("");
+  const [legacyUsers, setLegacyUsers] = useState([]);
+  const [newMembers, setNewMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [currentLdId, setCurrentLdId] = useState("");
 
-  const [showAdd, setShowAdd] = useState(false);
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("member");
-  const [createdPin, setCreatedPin] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteSurname, setInviteSurname] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteErr, setInviteErr] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState(false);
 
-  async function load() {
-    setErr("");
-    setLoading(true);
+  async function loadLegacyUsers() {
     try {
       const out = await api("/ld/users");
-      setUsers(out.users || []);
+      setLegacyUsers(out.users || []);
     } catch (e) {
       setErr(e.message);
-    } finally {
-      setLoading(false);
     }
   }
 
+  async function loadNewMembers(ldId) {
+    if (!ldId) return;
+    try {
+      const result = await listLdMembers({ ldId });
+      setNewMembers(result.data.members || []);
+    } catch (e) {
+      setErr(e?.message || "Napaka pri nalaganju novih članov.");
+    }
+  }
+
+  async function loadAll(ldId) {
+    setErr("");
+    setLoading(true);
+    await Promise.all([loadLegacyUsers(), loadNewMembers(ldId)]);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    load();
+    api("/auth/me")
+      .then((out) => {
+        const ldId = out?.user?.ldId || "";
+        setCurrentLdId(ldId);
+        loadAll(ldId);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
   }, []);
 
+  function refresh() {
+    loadAll(currentLdId);
+  }
+
+  // ---- Legacy akcije ----
   async function toggleEnabled(u) {
     setErr("");
     try {
@@ -37,7 +91,7 @@ export default function UsersPage() {
         method: "PATCH",
         body: { enabled: !u.enabled },
       });
-      await load();
+      refresh();
     } catch (e) {
       setErr(e.message);
     }
@@ -50,117 +104,249 @@ export default function UsersPage() {
         method: "POST",
       });
       alert(`NOV PIN za ${u.name} (${u.code}): ${out.pin}`);
-      await load();
+      refresh();
     } catch (e) {
       setErr(e.message);
     }
   }
 
-  async function removeUser(u) {
-    setErr("");
-    const ok = confirm(
-      `Odstranim uporabnika ${u.name} (${u.code})?\n\nPOZOR: To ga TRAJNO izbriše iz Firestore (ni samo disable).`
-    );
+  // ---- Nov sistem akcije ----
+  async function handleDeactivate(m) {
+    const ok = confirm(`Deaktiviram člana ${m.name} (${m.email})?`);
     if (!ok) return;
-
-    try {
-      await api(`/ld/users/${encodeURIComponent(u.code)}`, { method: "DELETE" });
-      await load();
-    } catch (e) {
-      setErr(e.message);
-    }
-  }
-
-  async function createUser(e) {
-    e.preventDefault();
     setErr("");
-    setCreatedPin("");
-
     try {
-      const out = await api("/ld/users", {
-        method: "POST",
-        body: { code: code.trim(), name: name.trim(), role },
-      });
-
-      setCreatedPin(out.pin || "");
-      setCode("");
-      setName("");
-      setRole("member");
-      await load();
+      await deactivateMember({ membershipId: m.membershipId });
+      refresh();
     } catch (e) {
-      setErr(e.message);
+      setErr(e?.message || "Napaka pri deaktivaciji člana.");
     }
   }
+
+  async function handleReactivate(m) {
+    setErr("");
+    try {
+      await reactivateMember({ membershipId: m.membershipId });
+      refresh();
+    } catch (e) {
+      setErr(e?.message || "Napaka pri ponovni aktivaciji člana.");
+    }
+  }
+
+  async function handleChangeRole(m, newRole) {
+    setErr("");
+    try {
+      await changeMemberRole({ membershipId: m.membershipId, newRole });
+      refresh();
+    } catch (e) {
+      setErr(e?.message || "Napaka pri spremembi vloge.");
+    }
+  }
+
+  async function handleResendInvite(m) {
+    setErr("");
+    try {
+      await resendInvite({ membershipId: m.membershipId });
+      alert("Povabilo je bilo ponovno poslano.");
+      refresh();
+    } catch (e) {
+      setErr(e?.message || "Napaka pri ponovnem pošiljanju povabila.");
+    }
+  }
+
+  async function handleToggleBoard(row) {
+    setErr("");
+    const next = row.raw.isBoardMember !== true;
+    try {
+      if (row.source === "legacy") {
+        await api(`/ld/users/${encodeURIComponent(row.raw.code)}`, {
+          method: "PATCH",
+          body: { isBoardMember: next },
+        });
+      } else {
+        await setMemberBoardFlag({
+          membershipId: row.raw.membershipId,
+          isBoardMember: next,
+        });
+      }
+      refresh();
+    } catch (e) {
+      setErr(e?.message || "Napaka pri spremembi clanstva v upravnem odboru.");
+    }
+  }
+
+  // ---- Invite obrazec ----
+  async function sendInvite(e) {
+    e.preventDefault();
+    setInviteErr("");
+
+    if (!inviteEmail.trim()) {
+      setInviteErr("Email je obvezen.");
+      return;
+    }
+    if (!currentLdId) {
+      setInviteErr("Ni bilo mogoče ugotoviti vaše lovske družine. Poskusite se znova prijaviti.");
+      return;
+    }
+
+    setInviteLoading(true);
+    try {
+      await inviteMember({
+        ldId: currentLdId,
+        email: inviteEmail.trim(),
+        name: inviteName.trim(),
+        surname: inviteSurname.trim(),
+        role: inviteRole,
+      });
+      setInviteSuccess(true);
+      setInviteEmail("");
+      setInviteName("");
+      setInviteSurname("");
+      setInviteRole("member");
+      refresh();
+    } catch (e) {
+      const code = e?.code || "";
+      if (code.includes("permission-denied")) {
+        setInviteErr("Nimate pravic za povabilo članov v to lovsko družino.");
+      } else if (code.includes("already-exists")) {
+        setInviteErr("Ta oseba je že aktivni član te lovske družine.");
+      } else if (code.includes("unauthenticated")) {
+        setInviteErr("Prijava za nov sistem ni bila vzpostavljena. Poskusite se znova prijaviti.");
+      } else {
+        setInviteErr(e?.message || "Napaka pri pošiljanju povabila.");
+      }
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  // ---- Združen seznam za prikaz ----
+  const legacyRows = legacyUsers.map((u) => ({
+    source: "legacy",
+    id: u.code,
+    identifier: u.code,
+    name: u.name,
+    role: u.role,
+    status: u.enabled ? "enabled" : "disabled",
+    raw: u,
+  }));
+
+  const newRows = newMembers.map((m) => ({
+    source: "new",
+    id: m.membershipId,
+    identifier: m.email,
+    name: `${m.name || ""} ${m.surname || ""}`.trim() || "(brez imena)",
+    role: m.role,
+    status: m.status,
+    raw: m,
+  }));
+
+  const allRows = [...legacyRows, ...newRows].sort((a, b) =>
+    String(a.name).localeCompare(String(b.name), "sl")
+  );
 
   return (
     <>
       <div className="page-sub" style={{ marginBottom: 10 }}>
-        Seznam članov za tvojo LD. Tukaj dodajaš uporabnike, omogočiš/onemogočiš račun, resetiraš PIN in odstraniš uporabnika.
+        Seznam vseh članov za tvojo LD - stari (ID + PIN) in novi (email + PIN) sistem skupaj.
       </div>
 
       {err && <div className="error">{err}</div>}
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-        <button className="btn-mini" onClick={() => setShowAdd(true)}>
-          Dodaj uporabnika
+        <button
+          className="btn-mini"
+          onClick={() => { setShowInvite(true); setInviteSuccess(false); setInviteErr(""); }}
+        >
+          Povabi po emailu
         </button>
-        <button className="btn-mini" onClick={load}>
+        <button className="btn-mini" onClick={refresh}>
           Osveži
         </button>
       </div>
 
-      {showAdd && (
-        <div className="modal-backdrop" onClick={() => setShowAdd(false)}>
+      {showInvite && (
+        <div className="modal-backdrop" onClick={() => setShowInvite(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Dodaj uporabnika</h3>
+            <h3 className="modal-title">Povabi po emailu</h3>
+            <div className="page-sub" style={{ marginBottom: 12 }}>
+              Nov, varen način dodajanja članov - oseba prejme email z
+              vabilom in si sama nastavi PIN.
+            </div>
 
-            <form onSubmit={createUser}>
-              <div className="field">
-                <div className="label">Koda (doc ID) *</div>
-                <input
-                  className="input"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="npr. 1001 ali lovec_01"
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">Ime in priimek *</div>
-                <input
-                  className="input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="npr. Janez Novak"
-                />
-              </div>
-
-              <div className="field">
-                <div className="label">Vloga</div>
-                <select className="input" value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="member">member</option>
-                  <option value="moderator">moderator</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button type="button" className="btn-mini" onClick={() => setShowAdd(false)} style={{ opacity: 0.85 }}>
-                  Zapri
-                </button>
-                <button className="btn-mini" type="submit">
-                  Ustvari
-                </button>
-              </div>
-            </form>
-
-            {createdPin && (
-              <div className="pin-box" style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 900 }}>Začetni PIN</div>
-                <div className="pin-value">{createdPin}</div>
-                <div className="page-sub" style={{ marginTop: 6 }}>
-                  Ta PIN pokaži uporabniku. Kasneje ga lahko resetiraš.
+            {inviteSuccess ? (
+              <>
+                <div className="page-sub">
+                  ✅ Vabilo je bilo uspešno poslano. Oseba bo prejela email
+                  z navodili za nastavitev PIN-a v naslednjih 48 urah.
                 </div>
-              </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                  <button className="btn-mini" onClick={() => setShowInvite(false)}>
+                    Zapri
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form onSubmit={sendInvite}>
+                <div className="field">
+                  <div className="label">Email *</div>
+                  <input
+                    className="input"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="lovec@email.si"
+                    type="email"
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="label">Ime</div>
+                  <input
+                    className="input"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="npr. Janez"
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="label">Priimek</div>
+                  <input
+                    className="input"
+                    value={inviteSurname}
+                    onChange={(e) => setInviteSurname(e.target.value)}
+                    placeholder="npr. Novak"
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="label">Vloga</div>
+                  <select
+                    className="input"
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                  >
+                    <option value="member">member</option>
+                    <option value="moderator">moderator</option>
+                  </select>
+                </div>
+
+                {inviteErr && <div className="error">{inviteErr}</div>}
+
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="btn-mini"
+                    onClick={() => setShowInvite(false)}
+                    style={{ opacity: 0.85 }}
+                  >
+                    Prekliči
+                  </button>
+                  <button className="btn-mini" type="submit" disabled={inviteLoading}>
+                    {inviteLoading ? "Pošiljam..." : "Pošlji vabilo"}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>
@@ -170,9 +356,10 @@ export default function UsersPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>Koda</th>
               <th>Ime</th>
+              <th>Koda / Email</th>
               <th>Vloga</th>
+              <th>Upravni odbor</th>
               <th>Status</th>
               <th style={{ width: 320 }}>Akcije</th>
             </tr>
@@ -181,44 +368,82 @@ export default function UsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="5" style={{ padding: 14 }}>
+                <td colSpan="6" style={{ padding: 14 }}>
                   Nalagam...
                 </td>
               </tr>
-            ) : users.length === 0 ? (
+            ) : allRows.length === 0 ? (
               <tr>
-                <td colSpan="5" style={{ padding: 14 }}>
+                <td colSpan="6" style={{ padding: 14 }}>
                   Ni uporabnikov.
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
-                <tr key={u.code}>
+              allRows.map((row) => (
+                <tr key={`${row.source}-${row.id}`}>
                   <td>
-                    <b>{u.code}</b>
+                    <b>{row.name}</b>
                   </td>
-                  <td>{u.name}</td>
-                  <td>{u.role}</td>
+                  <td>{row.identifier}</td>
+                  <td>{row.role}</td>
                   <td>
-                    <span className={u.enabled ? "pill pill-on" : "pill pill-off"}>{u.enabled ? "ENABLED" : "DISABLED"}</span>
+                    <input
+                      type="checkbox"
+                      checked={row.raw.isBoardMember === true}
+                      disabled={!(row.source === "legacy" || row.status === "active")}
+                      onChange={() => handleToggleBoard(row)}
+                      title="Clan upravnega odbora"
+                    />
+                  </td>
+                  <td>
+                    <span className={isActiveStatus(row.status) ? "pill pill-on" : "pill pill-off"}>
+                      {STATUS_LABELS[row.status] || row.status}
+                    </span>
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button className="btn-ghost" onClick={() => toggleEnabled(u)}>
-                        {u.enabled ? "Onemogoči" : "Omogoči"}
-                      </button>
+                      {row.source === "legacy" && (
+                        <>
+                          <button className="btn-ghost" onClick={() => toggleEnabled(row.raw)}>
+                            {row.raw.enabled ? "Onemogoči" : "Omogoči"}
+                          </button>
+                          <button className="btn-ghost" onClick={() => resetPin(row.raw)}>
+                            Reset PIN
+                          </button>
+                        </>
+                      )}
 
-                      <button className="btn-ghost" onClick={() => resetPin(u)}>
-                        Reset PIN
-                      </button>
+                      {row.source === "new" && row.status === "active" && (
+                        <>
+                          <button
+                            className="btn-ghost"
+                            onClick={() =>
+                              handleChangeRole(row.raw, row.role === "moderator" ? "member" : "moderator")
+                            }
+                          >
+                            {row.role === "moderator" ? "Naredi member" : "Naredi moderator"}
+                          </button>
+                          <button
+                            className="btn-ghost"
+                            onClick={() => handleDeactivate(row.raw)}
+                            style={{ borderColor: "rgba(200,0,0,.25)", color: "#a01515" }}
+                          >
+                            Deaktiviraj
+                          </button>
+                        </>
+                      )}
 
-                      <button
-                        className="btn-ghost"
-                        onClick={() => removeUser(u)}
-                        style={{ borderColor: "rgba(200,0,0,.25)", color: "#a01515" }}
-                      >
-                        Odstrani
-                      </button>
+                      {row.source === "new" && row.status === "deactivated" && (
+                        <button className="btn-ghost" onClick={() => handleReactivate(row.raw)}>
+                          Aktiviraj
+                        </button>
+                      )}
+
+                      {row.source === "new" && (row.status === "invited" || row.status === "expired") && (
+                        <button className="btn-ghost" onClick={() => handleResendInvite(row.raw)}>
+                          Ponovno pošlji povabilo
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

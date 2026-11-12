@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, clearToken, setToken } from "./api.js";
 
 import UsersPage from "./UsersPage.jsx";
+import MigrationPage from "./MigrationPage.jsx";
 import HuntLogsPage from "./HuntLogsPage.jsx";
 import ActiveHuntsPage from "./ActiveHuntsPage.jsx";
 import KmlMejePage from "./KmlMejePage.jsx";
@@ -10,6 +11,7 @@ import OdvzemPage from "./OdvzemPage.jsx";
 import EventsPage from "./EventsPage.jsx";
 import WorkHoursPage from "./WorkHoursPage.jsx";
 import AssignmentsPage from "./AssignmentsPage.jsx";
+import BoardPage from "./BoardPage.jsx";
 import Footer from "./components/Footer.jsx";
 import TermsPage from "./TermsPage.jsx";
 import PrivacyPage from "./PrivacyPage.jsx";
@@ -21,7 +23,9 @@ const NAV = [
   { key: "workhours", label: "Delovne ure" },
   { key: "assignments", label: "Zadolžitve" },
   { key: "active", label: "Aktivni lov" },
+  { key: "board", label: "Upravni odbor" },
   { key: "users", label: "Uporabniki" },
+  { key: "migration", label: "Migracija" },
   { key: "logs", label: "Dnevniki lova" },
   { key: "odvzem", label: "Plan odvzema" },
   { key: "kml", label: "KML / meje" },
@@ -49,6 +53,18 @@ export default function Portal({ onLogout }) {
     const r = String(me?.role || "").trim();
     return r === "super" || r === "admin";
   }, [me?.role]);
+
+  const isStaff = ["moderator", "admin", "super"].includes(
+    String(me?.role || "").trim()
+  );
+
+  const visibleNav = useMemo(() => {
+    return NAV.filter((n) => {
+      if (n.key === "board") return me?.isBoardMember === true || isSuper;
+      if (n.key === "migration") return isStaff;
+      return true;
+    });
+  }, [me?.isBoardMember, isSuper, isStaff]);
 
   const activeLdId = useMemo(
     () => String(dash?.ldId || me?.ldId || "").trim(),
@@ -246,7 +262,7 @@ export default function Portal({ onLogout }) {
                 </div>
 
                 <div className="drawer-body">
-                  {NAV.map((n) => (
+                  {visibleNav.map((n) => (
                     <button
                       key={n.key}
                       className={"navbtn" + (tab === n.key ? " active" : "")}
@@ -266,7 +282,7 @@ export default function Portal({ onLogout }) {
               <aside className="sidebar">
                 <div className="nav-title">Meni</div>
 
-                {NAV.map((n) => (
+                {visibleNav.map((n) => (
                   <button
                     key={n.key}
                     className={"navbtn" + (tab === n.key ? " active" : "")}
@@ -292,7 +308,9 @@ export default function Portal({ onLogout }) {
               {tab === "workhours" && <WorkHoursPage />}
               {tab === "assignments" && <AssignmentsPage />}
               {tab === "active" && <ActiveHuntsPage />}
+              {tab === "board" && <BoardPage me={me} />}
               {tab === "users" && <UsersPage />}
+              {tab === "migration" && <MigrationPage />}
               {tab === "logs" && <HuntLogsPage />}
               {tab === "odvzem" && <OdvzemPage me={me} />}
               {tab === "kml" && <KmlMejePage dash={dash} me={me} />}
@@ -507,8 +525,12 @@ function titleFor(tab) {
       return "Zadolžitve";
     case "active":
       return "Aktivni lov";
+    case "board":
+      return "Upravni odbor";
     case "users":
       return "Uporabniki";
+    case "migration":
+      return "Migracija";
     case "logs":
       return "Dnevniki lova";
     case "odvzem":
@@ -536,8 +558,12 @@ function subtitleFor(tab) {
       return "Dodeljevanje zadolžitev lovcem in pregled njihovih odgovornosti.";
     case "active":
       return "Kdo je trenutno na lovu (z lokacijo, če je na voljo).";
+    case "board":
+      return "Seje, prisotnost, zapisniki in odloki v postopku sprejemanja.";
     case "users":
       return "Upravljanje članov, PIN-ov in vlog.";
+    case "migration":
+      return "Množično povabilo obstoječih (starih) članov v nov email+PIN sistem.";
     case "logs":
       return "Pregled, filtriranje in izvoz dnevnikov.";
     case "odvzem":
