@@ -37,7 +37,7 @@ export default function AssignmentsPage() {
   async function loadUsers() {
     setLoadingUsers(true);
     try {
-      const out = await api("/ld/users");
+      const out = await api("/ld/members");
       setUsers(Array.isArray(out?.users) ? out.users : []);
     } catch (e) {
       setErr(e.message);
@@ -214,7 +214,7 @@ export default function AssignmentsPage() {
                   </option>
                   {sortedUsers.map((u) => (
                     <option key={u.code} value={u.code}>
-                      {u.name} ({u.code})
+                      {u.name}{u.source === "email" ? "" : ` (${u.code})`}
                     </option>
                   ))}
                 </select>
